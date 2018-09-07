@@ -899,6 +899,10 @@ class map
         void update_lum( item_location &loc, bool add );
 
         /**
+         * Cache NO_FREEZING option to avoid repeated calls
+         */
+        bool no_freezing;
+        /**
          * Governs HOT/COLD/FROZEN status of items in a fridge/freezer or in cold temperature
          * and sets item's fridge/freezer status variables.
          * @param it Item processed.
