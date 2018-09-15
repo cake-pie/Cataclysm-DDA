@@ -17,6 +17,8 @@
 #include "cata_utility.h"
 #include "calendar.h"
 
+extern bool no_freezing;
+
 class nc_color;
 class JsonObject;
 class JsonIn;

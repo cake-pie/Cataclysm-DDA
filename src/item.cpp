@@ -6019,7 +6019,7 @@ void item::calc_temp( const int temp, const float insulation, const time_duratio
             if( temp <= temperatures::cold ) {
                 item_counter += loop_diff;
                 if( item_counter > 600 ) {
-                    if( temp <= freeze_point ) {
+                    if( temp <= freeze_point && ( !no_freezing || has_flag( "MELTS" ) ) ) {
                         // if temp is colder than freeze point start ticking frozen
                         item_tags.erase( "COLD" );
                         item_tags.insert( "FROZEN" );

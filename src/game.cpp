@@ -766,6 +766,9 @@ void game::setup()
 
     load_world_modfiles( ui );
 
+    // Cache NO_FREEZING option to avoid repeated calls
+    no_freezing = get_option<bool>( "NO_FREEZING" );
+
     m =  map( get_option<bool>( "ZLEVELS" ) );
 
     next_npc_id = 1;

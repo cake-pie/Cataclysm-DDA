@@ -31,6 +31,7 @@ extern bool trigdist;
 extern bool use_tiles;
 extern bool fov_3d;
 extern bool tile_iso;
+extern bool no_freezing;
 
 extern const int core_version;
 

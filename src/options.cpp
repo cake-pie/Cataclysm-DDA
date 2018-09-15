@@ -43,6 +43,7 @@ bool log_from_top;
 int message_ttl;
 bool fov_3d;
 bool tile_iso;
+bool no_freezing;
 
 #ifdef TILES
 extern std::unique_ptr<cata_tiles> tilecontext;
