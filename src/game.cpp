@@ -1488,6 +1488,9 @@ bool game::do_turn()
         calendar::turn.increment();
     }
 
+    // starting a new turn, clear out temperature cache
+    temperature_cache.clear();
+
     if( npcs_dirty ) {
         load_npcs();
     }
@@ -1544,7 +1547,7 @@ bool game::do_turn()
         sfx::do_hearing_loss();
     }
 
-    if( !u.in_sleep_state() ) {
+    if( !u.has_effect( efftype_id( "sleep" ) ) ) {
         if( u.moves > 0 || uquit == QUIT_WATCH ) {
             while( u.moves > 0 || uquit == QUIT_WATCH ) {
                 cleanup_dead();
@@ -1934,6 +1937,11 @@ int get_convection_temperature( const tripoint &location )
 
 int game::get_temperature( const tripoint &location )
 {
+    const auto &cached = temperature_cache.find( location );
+    if( cached != temperature_cache.end() ) {
+        return cached->second;
+    }
+
     int temp_mod = 0; // local modifier
 
     if( !new_game ) {
@@ -1941,8 +1949,11 @@ int game::get_temperature( const tripoint &location )
         temp_mod += get_convection_temperature( location );
     }
     //underground temperature = average New England temperature = 43F/6C rounded to int
-    return ( location.z < 0 ? AVERAGE_ANNUAL_TEMPERATURE : temperature ) + ( new_game ? 0 :
-            ( m.temperature( location ) + temp_mod ) );
+    const int temp = ( location.z < 0 ? AVERAGE_ANNUAL_TEMPERATURE : temperature ) +
+                     ( new_game ? 0 : ( m.temperature( location ) + temp_mod ) );
+
+    temperature_cache.emplace( std::make_pair( location, temp ) );
+    return temp;
 }
 
 int game::assign_mission_id()
@@ -4631,7 +4642,7 @@ void game::monmove()
             add_msg( m_warning, _( "Your motion alarm goes off!" ) );
             cancel_activity_or_ignore_query( distraction_type::motion_alarm,
                                              _( "Your motion alarm goes off!" ) );
-            if( u.in_sleep_state() ) {
+            if( u.has_effect( efftype_id( "sleep" ) ) ) {
                 u.wake_up();
             }
         }
