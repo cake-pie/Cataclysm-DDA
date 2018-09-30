@@ -134,6 +134,13 @@
   },
   {
     "type": "EXTERNAL_OPTION",
+    "name": "SLEEP_DEPRIVATION",
+    "info": "Enables sleep deprivation mechanics. If true, stimulants will only help you so far, and you might have to enforce proper sleep hygiene for a while.",
+    "stype": "bool",
+    "value": false
+  },
+  {
+    "type": "EXTERNAL_OPTION",
     "name": "NO_FREEZING",
     "info": "Disables freezing of food and drink.  If true, food and drink will not freeze, except those that are meant to be consumed frozen (e.g. ice cream).",
     "stype": "bool",
