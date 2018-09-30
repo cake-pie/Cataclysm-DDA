@@ -38,6 +38,7 @@
 #include "messages.h"
 #include "sounds.h"
 #include "item_action.h"
+#include "vpart_range.h"
 #include "mongroup.h"
 #include "morale.h"
 #include "morale_types.h"
@@ -2822,8 +2823,8 @@ bool player::has_alarm_clock() const
 {
     return ( has_item_with_flag( "ALARMCLOCK" ) ||
              (
-                 ( g->m.veh_at( pos() ) ) &&
-                 !g->m.veh_at( pos() )->vehicle().all_parts_with_feature( "ALARMCLOCK", true ).empty()
+                 g->m.veh_at( pos() ) &&
+                 !empty( g->m.veh_at( pos() )->vehicle().parts_with_feature( "ALARMCLOCK", true ) )
              ) ||
              has_bionic( bio_watch )
            );
@@ -2833,8 +2834,8 @@ bool player::has_watch() const
 {
     return ( has_item_with_flag( "WATCH" ) ||
              (
-                 ( g->m.veh_at( pos() ) ) &&
-                 !g->m.veh_at( pos() )->vehicle().all_parts_with_feature( "WATCH", true ).empty()
+                 g->m.veh_at( pos() ) &&
+                 !empty( g->m.veh_at( pos() )->vehicle().parts_with_feature( "WATCH", true ) )
              ) ||
              has_bionic( bio_watch )
            );
@@ -4248,7 +4249,8 @@ void player::update_needs( int rate_multiplier )
     const bool foodless = debug_ls || npc_no_food;
     const bool has_recycler = has_bionic( bio_recycler );
     const bool asleep = !sleep.is_null();
-    const bool lying = asleep || has_effect( effect_lying_down );
+    const bool lying = asleep || has_effect( effect_lying_down ) ||
+                       activity.id() == "ACT_TRY_SLEEP";
     const bool hibernating = asleep && is_hibernating();
     const bool mouse = has_trait( trait_NO_THIRST );
     const bool mycus = has_trait( trait_M_DEPENDENT );

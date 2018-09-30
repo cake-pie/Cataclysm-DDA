@@ -504,7 +504,7 @@ bool item::is_worn_only_with( const item &it ) const
 
 item item::in_its_container() const
 {
-    return in_container( type->default_container );
+    return in_container( type->default_container.value_or( "null" ) );
 }
 
 item item::in_container( const itype_id &cont ) const
@@ -4425,8 +4425,13 @@ int item::get_remaining_chapters( const player &u ) const
 
 void item::mark_chapter_as_read( const player &u )
 {
-    const int remain = std::max( 0, get_remaining_chapters( u ) - 1 );
     const auto var = string_format( "remaining-chapters-%d", u.getID() );
+    if( type->book && type->book->chapters == 0 ) {
+        // books without chapters will always have remaining chapters == 0, so we don't need to store them
+        erase_var( var );
+        return;
+    }
+    const int remain = std::max( 0, get_remaining_chapters( u ) - 1 );
     set_var( var, remain );
 }
 
@@ -5651,6 +5656,10 @@ bool item::use_amount( const itype_id &it, long &quantity, std::list<item> &used
 
 bool item::allow_crafting_component() const
 {
+    if( is_toolmod() && is_irremovable() ) {
+        return false;
+    }
+
     // vehicle batteries are implemented as magazines of charge
     if( is_magazine() && ammo_type() == ammotype( "battery" ) ) {
         return true;
