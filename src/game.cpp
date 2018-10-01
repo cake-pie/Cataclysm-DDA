@@ -735,6 +735,21 @@ void game::toggle_pixel_minimap()
 #endif // TILES
 }
 
+void game::reload_tileset()
+{
+#ifdef TILES
+    try {
+        tilecontext->reinit();
+        tilecontext->load_tileset( get_option<std::string>( "TILES" ), false, true );
+        tilecontext->do_tile_loading_report();
+    } catch( const std::exception &err ) {
+        popup( _( "Loading the tileset failed: %s" ), err.what() );
+    }
+    g->reset_zoom();
+    g->refresh_all();
+#endif // TILES
+}
+
 // temporarily switch out of fullscreen for functions that rely
 // on displaying some part of the sidebar
 void game::temp_exit_fullscreen()
@@ -2382,6 +2397,7 @@ input_context get_default_mode_input_context()
     ctxt.register_action( "toggle_fullscreen" );
 #endif
     ctxt.register_action( "toggle_pixel_minimap" );
+    ctxt.register_action( "reload_tileset" );
     ctxt.register_action( "toggle_auto_pulp_butcher" );
     ctxt.register_action( "action_menu" );
     ctxt.register_action( "main_menu" );
@@ -4893,10 +4909,11 @@ void game::knockback( std::vector<tripoint> &traj, int force, int stun, int dam_
                     targ->add_effect( effect_stunned, 1_turns * force_remaining );
                 }
                 traj.erase( traj.begin(), traj.begin() + i );
-                if( critter_at<monster>( traj.front() ) ) {
+                const tripoint &traj_front = traj.front();
+                if( critter_at<monster>( traj_front ) ) {
                     add_msg( _( "%s collided with something else and sent it flying!" ),
                              targ->name.c_str() );
-                } else if( npc *const guy = critter_at<npc>( traj.front() ) ) {
+                } else if( npc *const guy = critter_at<npc>( traj_front ) ) {
                     if( guy->male ) {
                         add_msg( _( "%s collided with someone else and sent him flying!" ),
                                  targ->name.c_str() );
@@ -4904,12 +4921,12 @@ void game::knockback( std::vector<tripoint> &traj, int force, int stun, int dam_
                         add_msg( _( "%s collided with someone else and sent her flying!" ),
                                  targ->name.c_str() );
                     }
-                } else if( u.posx() == traj.front().x && u.posy() == traj.front().y &&
+                } else if( u.posx() == traj_front.x && u.posy() == traj_front.y &&
                            ( u.has_trait( trait_LEG_TENT_BRACE ) && ( !u.footwear_factor() ||
                                    ( u.footwear_factor() == .5 && one_in( 2 ) ) ) ) ) {
                     add_msg( _( "%s collided with you, and barely dislodges your tentacles!" ), targ->name.c_str() );
                     force_remaining = 1;
-                } else if( u.posx() == traj.front().x && u.posy() == traj.front().y ) {
+                } else if( u.posx() == traj_front.x && u.posy() == traj_front.y ) {
                     add_msg( m_bad, _( "%s collided with you and sent you flying!" ), targ->name.c_str() );
                 }
                 knockback( traj, force_remaining, stun, dam_mult );
@@ -10108,7 +10125,7 @@ bool game::prompt_dangerous_tile( const tripoint &dest_loc ) const
         // Hack for now, later ledge should stop being a trap
         // Note: in non-z-level mode, ledges obey different rules and so should be handled as regular traps
         if( tr.loadid == tr_ledge && m.has_zlevels() ) {
-            if( !boardable && !m.has_floor_or_support( dest_loc ) ) {
+            if( !boardable ) {
                 harmful_stuff.emplace_back( tr.name().c_str() );
             }
         } else if( tr.can_see( dest_loc, u ) && !tr.is_benign() ) {
