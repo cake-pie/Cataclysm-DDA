@@ -93,6 +93,7 @@ static const trait_id trait_PER_SLIME_OK( "PER_SLIME_OK" );
 static const trait_id trait_PER_SLIME( "PER_SLIME" );
 static const trait_id trait_SHELL2( "SHELL2" );
 static const trait_id trait_SHELL( "SHELL" );
+static const trait_id trait_SMALL( "SMALL" );
 static const trait_id trait_SMALL2( "SMALL2" );
 static const trait_id trait_SMALL_OK( "SMALL_OK" );
 static const trait_id trait_STRONGBACK( "STRONGBACK" );
@@ -1158,8 +1159,22 @@ bool Character::can_use( const item &it, const item &context ) const
     return true;
 }
 
-void Character::drop_inventory_overflow()
+void Character::drop_invalid_inventory()
 {
+    bool dropped_liquid = false;
+    for( const std::list<item> *stack : inv.const_slice() ) {
+        const item &it = stack->front();
+        if( it.made_of( LIQUID ) ) {
+            dropped_liquid = true;
+            g->m.add_item_or_charges( pos(), it );
+            // must be last
+            i_rem( &it );
+        }
+    }
+    if( dropped_liquid ) {
+        add_msg_if_player( m_bad, _( "Liquid from your inventory has leaked onto the ground." ) );
+    }
+
     if( volume_carried() > volume_capacity() ) {
         for( auto &item_to_drop :
              inv.remove_randomly_by_volume( volume_carried() - volume_capacity() ) ) {
@@ -1416,6 +1431,9 @@ void Character::reset_stats()
     }
     if( has_trait( trait_TAIL_FLUFFY ) ) {
         mod_dodge_bonus( 4 );
+    }
+    if( has_trait( trait_SMALL ) ) {
+        mod_dodge_bonus( 1 );
     }
     if( has_trait( trait_SMALL2 ) ) {
         mod_dodge_bonus( 2 );
@@ -2422,7 +2440,7 @@ bool Character::pour_into( item &container, item &liquid )
 bool Character::pour_into( vehicle &veh, item &liquid )
 {
     auto sel = [&]( const vehicle_part & pt ) {
-        return pt.is_tank() && pt.can_reload( liquid.typeId() );
+        return pt.is_tank() && pt.can_reload( liquid );
     };
 
     auto stack = units::legacy_volume_factor / liquid.type->stack_size;

@@ -509,6 +509,7 @@ player::player() : Character()
     controlling_vehicle = false;
     grab_point = {0, 0, 0};
     grab_type = OBJECT_NONE;
+    hauling = false;
     move_mode = "walk";
     style_selected = style_none;
     keep_hands_free = false;
@@ -762,7 +763,7 @@ void player::process_turn()
     // If we're actively handling something we can't just drop it on the ground
     // in the middle of handling it
     if ( !activity.targets.size() ) {
-        drop_inventory_overflow();
+        drop_invalid_inventory();
     }
 
     // Didn't just pick something up
@@ -2999,6 +3000,9 @@ void player::toggle_move_mode()
     if( move_mode == "walk" ) {
         if( stamina > 0 && !has_effect( effect_winded ) ) {
             move_mode = "run";
+            if( is_hauling() ) {
+                stop_hauling();
+            }
             add_msg(_("You start running."));
         } else {
             add_msg(m_bad, _("You're too tired to run."));
@@ -3636,7 +3640,7 @@ int player::reduce_healing_effect( const efftype_id &eff_id, int remove_med, bod
     Where damage to player is actually applied to hit body parts
     Might be where to put bleed stuff rather than in player::deal_damage()
  */
-void player::apply_damage(Creature *source, body_part hurt, int dam)
+void player::apply_damage(Creature *source, body_part hurt, int dam, const bool bypass_med )
 {
     if( is_dead_state() || has_trait( trait_DEBUG_NODMG ) ) {
         // don't do any more damage if we're already dead
@@ -3671,13 +3675,15 @@ void player::apply_damage(Creature *source, body_part hurt, int dam)
         on_hurt( source );
     }
 
-    // remove healing effects if damaged
-    int remove_med = roll_remainder( dam / 5.0f );
-    if( remove_med > 0 && has_effect( effect_bandaged, hurt ) ) {
-        remove_med -= reduce_healing_effect( effect_bandaged , remove_med, hurt );
-    }
-    if( remove_med > 0 && has_effect( effect_disinfected, hurt ) ) {
-        remove_med -= reduce_healing_effect( effect_disinfected , remove_med, hurt );
+    if( !bypass_med ) {
+        // remove healing effects if damaged
+        int remove_med = roll_remainder( dam / 5.0f );
+        if( remove_med > 0 && has_effect( effect_bandaged, hurt ) ) {
+            remove_med -= reduce_healing_effect( effect_bandaged , remove_med, hurt );
+        }
+        if( remove_med > 0 && has_effect( effect_disinfected, hurt ) ) {
+            remove_med -= reduce_healing_effect( effect_disinfected , remove_med, hurt );
+        }
     }
 }
 
@@ -7574,6 +7580,11 @@ item::reload_option player::select_ammo( const item& base, bool prompt ) const
     bool ammo_match_found = false;
     for( const auto e : opts ) {
         for( item_location& ammo : find_ammo( *e ) ) {
+            // don't try to unload frozen liquids
+            if( ammo->is_watertight_container() &&
+                ammo->contents.front().made_of( SOLID ) ) {
+                continue;
+            }
             auto id = ( ammo->is_ammo_container() || ammo->is_watertight_container() )
                 ? ammo->contents.front().typeId()
                 : ammo->typeId();
@@ -7757,7 +7768,7 @@ ret_val<bool> player::can_wear( const item& it  ) const
 
 ret_val<bool> player::can_wield( const item &it ) const
 {
-    if( it.made_of( LIQUID ) ) {
+    if( it.made_of( LIQUID, true ) ) {
         return ret_val<bool>::make_failure( _( "Can't wield spilt liquids." ) );
     }
 
@@ -8408,7 +8419,7 @@ bool player::wear_item( const item &to_wear, bool interactive )
         if( !was_deaf && is_deaf() ) {
             add_msg_if_player( m_info, _( "You're deafened!" ) );
         }
-        if( supertinymouse && to_wear.has_flag( "UNDERSIZE" ) ) {
+        if( supertinymouse && !to_wear.has_flag( "UNDERSIZE" ) ) {
             add_msg_if_player( m_warning, _( "This %s is too big to wear comfortably! Maybe it could be refitted..."), to_wear.tname().c_str() );
         } else if( to_wear.has_flag( "UNDERSIZE" ) ) {
             add_msg_if_player( m_warning, _( "This %s is too small to wear comfortably! Maybe it could be refitted..."), to_wear.tname().c_str() );
@@ -8640,7 +8651,8 @@ hint_rating player::rate_action_reload( const item &it ) const
 
 hint_rating player::rate_action_unload( const item &it ) const
 {
-    if( ( it.is_container() || it.is_bandolier() ) && !it.contents.empty() ) {
+    if( ( it.is_container() || it.is_bandolier() ) && !it.contents.empty() &&
+        it.can_unload_liquid() ) {
         return HINT_GOOD;
     }
 
@@ -9633,8 +9645,12 @@ void player::do_read( item &book )
 
             // Calculate experience gained
             /** @EFFECT_INT increases reading comprehension */
+            // Enhanced Memory Banks modestly boosts experience
             int min_ex = std::max( 1, reading->time / 10 + learner->get_int() / 4 );
             int max_ex = reading->time /  5 + learner->get_int() / 2 - originalSkillLevel;
+            if( has_active_bionic( bio_memory ) ) {
+                min_ex += 2;
+            }
             if( max_ex < 2 ) {
                 max_ex = 2;
             }
@@ -10683,7 +10699,7 @@ void player::absorb_hit(body_part bp, damage_instance &dam) {
         g->m.add_item_or_charges( pos(), remain );
     }
     if( armor_destroyed ) {
-        drop_inventory_overflow();
+        drop_invalid_inventory();
     }
 }
 
@@ -10837,6 +10853,9 @@ int player::adjust_for_focus(int amount) const
     if (has_trait( trait_FASTLEARNER ))
     {
         effective_focus += 15;
+    }
+    if( has_active_bionic( bio_memory ) ) {
+        effective_focus += 10;
     }
     if (has_trait( trait_SLOWLEARNER ))
     {
@@ -11020,6 +11039,9 @@ bool player::has_activity(const activity_id type) const
 
 void player::cancel_activity()
 {
+    if( has_activity( activity_id( "ACT_MOVE_ITEMS" ) ) && is_hauling() ) {
+        stop_hauling();
+    }
     // Clear any backlog items that aren't auto-resume.
     for( auto backlog_item = backlog.begin(); backlog_item != backlog.end(); ) {
         if( backlog_item->auto_resume ) {
@@ -11426,6 +11448,29 @@ object_type player::get_grab_type() const
     return grab_type;
 }
 
+void player::start_hauling()
+{
+    add_msg( _( "You start hauling items along the ground." ) );
+    if( is_armed() ) {
+        add_msg( m_warning, _( "Your hands are not free, which makes hauling slower." ) );
+    }
+    hauling = true;
+}
+
+void player::stop_hauling()
+{
+    add_msg( _( "You stop hauling items." ) );
+    hauling = false;
+    if( has_activity( activity_id( "ACT_MOVE_ITEMS" ) ) ) {
+        cancel_activity();
+    }
+}
+
+bool player::is_hauling() const
+{
+    return hauling;
+}
+
 bool player::has_weapon() const
 {
     return !unarmed_attack();
@@ -11600,7 +11645,9 @@ long player::get_memorized_terrain_curses( const tripoint &p ) const
 
 size_t player::max_memorized_submaps() const
 {
-    if( has_trait( trait_FORGETFUL ) ) {
+    if( has_active_bionic( bio_memory ) ) {
+        return 20000; // 5000 overmap tiles
+    } else if( has_trait( trait_FORGETFUL ) ) {
         return 200; // 50 overmap tiles
     } else if( has_trait( trait_GOODMEMORY ) ) {
         return 800; // 200 overmap tiles
@@ -12370,6 +12417,7 @@ void player::do_skill_rust()
         const bool charged_bio_mem = power_level > 25 && has_active_bionic( bio_memory );
         const int oldSkillLevel = skill_level_obj.level();
         if( skill_level_obj.rust( charged_bio_mem ) ) {
+            add_msg_if_player( m_warning, _( "Your knowledge of %s begins to fade, but your memory banks retain it!" ), aSkill.name() );
             charge_power( -25 );
         }
         const int newSkill = skill_level_obj.level();
