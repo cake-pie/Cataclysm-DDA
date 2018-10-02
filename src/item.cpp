@@ -5749,7 +5749,7 @@ void item::set_temp_from_static( const int counters )
     item_tags.erase( "COLD" );
     item_tags.erase( "HOT" );
 
-    if( counters < -1200 ) {
+    if( counters < -1200 && ( !no_freezing || has_flag( "MELTS" ) ) ) {
         item_tags.insert( "FROZEN" );
         item_counter = -counters - 1200;
         if( current_phase == LIQUID ) {
