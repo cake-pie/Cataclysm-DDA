@@ -3495,7 +3495,7 @@ int item::get_encumber_when_containing( units::volume contents_volume ) const
     return encumber;
 }
 
-int item::get_layer() const
+layer_level item::get_layer() const
 {
     if( has_flag( "SKINTIGHT" ) ) {
         return UNDERWEAR;
@@ -7011,15 +7011,20 @@ bool item::is_filthy() const
 
 bool item::on_drop( const tripoint &pos )
 {
+    return on_drop( pos, g->m );
+}
+
+bool item::on_drop( const tripoint &pos, map &m )
+{
     // dropping liquids, even currently frozen ones, on the ground makes them
     // dirty
-    if( made_of( LIQUID, true ) && !g->m.has_flag_furn( "LIQUIDCONT", pos ) &&
+    if( made_of( LIQUID, true ) && !m.has_flag( "LIQUIDCONT", pos ) &&
         !item_tags.count( "DIRTY" ) ) {
-
         item_tags.insert( "DIRTY" );
     }
     return type->drop_action && type->drop_action.call( g->u, *this, false, pos );
 }
+
 
 time_duration item::age() const
 {

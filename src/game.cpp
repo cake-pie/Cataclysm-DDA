@@ -7183,9 +7183,9 @@ void game::zones_manager()
 #endif
             }
 
-            inp_mngr.set_timeout( BLINK_SPEED );
+            ctxt.set_timeout( BLINK_SPEED );
         } else {
-            inp_mngr.reset_timeout();
+            ctxt.reset_timeout();
         }
 
         wrefresh( w_terrain );
@@ -7196,7 +7196,7 @@ void game::zones_manager()
         action = ctxt.handle_input();
     } while( action != "QUIT" );
     zones_manager_open = false;
-    inp_mngr.reset_timeout();
+    ctxt.reset_timeout();
 
     if( stuff_changed ) {
         auto &zones = zone_manager::get_manager();
@@ -7350,7 +7350,7 @@ tripoint game::look_around( catacurses::window w_info,
         }
 
         if( select_zone && has_first_point ) {
-            inp_mngr.set_timeout( BLINK_SPEED );
+            ctxt.set_timeout( BLINK_SPEED );
         }
 
         int dx, dy;
@@ -7453,7 +7453,7 @@ tripoint game::look_around( catacurses::window w_info,
         u.view_offset.z = 0;
     }
 
-    inp_mngr.reset_timeout();
+    ctxt.reset_timeout();
 
     if( bNewWindow ) {
         w_info = catacurses::window();
