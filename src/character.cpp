@@ -91,6 +91,7 @@ static const trait_id trait_NIGHTVISION( "NIGHTVISION" );
 static const trait_id trait_PACKMULE( "PACKMULE" );
 static const trait_id trait_PER_SLIME_OK( "PER_SLIME_OK" );
 static const trait_id trait_PER_SLIME( "PER_SLIME" );
+static const trait_id trait_SEESLEEP( "SEESLEEP" );
 static const trait_id trait_SHELL2( "SHELL2" );
 static const trait_id trait_SHELL( "SHELL" );
 static const trait_id trait_SMALL( "SMALL" );
@@ -543,7 +544,7 @@ void Character::recalc_sight_limits()
     vision_mode_cache.reset();
 
     // Set sight_max.
-    if( is_blind() || in_sleep_state() || has_effect( effect_narcosis ) ) {
+    if( is_blind() || ( in_sleep_state() && !has_trait( trait_SEESLEEP ) ) || has_effect( effect_narcosis ) ) {
         sight_max = 0;
     } else if( has_effect( effect_boomered ) && ( !( has_trait( trait_PER_SLIME_OK ) ) ) ) {
         sight_max = 1;
@@ -1070,6 +1071,12 @@ units::mass Character::weight_capacity() const
     }
     if( has_trait( trait_id( "SMALL_OK" ) ) ) {
         ret = ret * .70;
+    }
+    if( has_trait( trait_id( "LARGE" ) ) || has_trait( trait_id( "LARGE_OK" ) ) ) {
+        ret = ret * 1.05;
+    }
+    if( has_trait( trait_id( "HUGE" ) ) || has_trait( trait_id( "HUGE_OK" ) ) ) {
+        ret = ret * 1.1;
     }
     if( has_artifact_with( AEP_CARRY_MORE ) ) {
         ret += 22500_gram;
@@ -2179,7 +2186,7 @@ hp_part Character::body_window( const std::string &menu_header,
         const nc_color old_hp_col = has_any_effect ? all_state_col :
                                     limb_is_broken ? c_dark_gray : c_green;
         const auto &aligned_name = std::string( max_bp_name_len - utf8_width( e.name ), ' ' ) + e.name;
-        msg << string_format( "<color_%s>%s</color> <color_%s>%s</color>", 
+        msg << string_format( "<color_%s>%s</color> <color_%s>%s</color>",
                               color_name( all_state_col ), aligned_name,
                               color_name( old_hp_col ), hp_str( current_hp, maximal_hp ) );
         if( current_hp != new_hp || has_curable_effect ) {
