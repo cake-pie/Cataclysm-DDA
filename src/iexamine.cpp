@@ -2141,7 +2141,7 @@ void iexamine::fvat_full( player &p, const tripoint &examp )
 
     for( size_t i = 0; i < items_here.size(); i++ ) {
         auto &it = items_here[i];
-        if( !it.made_of( LIQUID ) ) {
+        if( !it.made_of_from_type( LIQUID ) ) {
             add_msg( _("You remove %s from the vat."), it.tname().c_str() );
             g->m.add_item_or_charges( p.pos(), it );
             g->m.i_rem( examp, i );
@@ -2224,7 +2224,7 @@ void iexamine::keg(player &p, const tripoint &examp)
     units::volume keg_cap = get_keg_capacity( examp );
     bool liquid_present = false;
     for (int i = 0; i < (int)g->m.i_at(examp).size(); i++) {
-        if (!g->m.i_at(examp)[i].made_of( LIQUID ) || liquid_present) {
+        if (!g->m.i_at(examp)[i].made_of_from_type( LIQUID ) || liquid_present) {
             g->m.add_item_or_charges(examp, g->m.i_at(examp)[i]);
             g->m.i_rem( examp, i );
             i--;
@@ -3805,9 +3805,9 @@ void smoker_finalize(player &, const tripoint &examp)
         } else if( item_it.typeId() == "human_flesh" ) {
             product = "human_smoked";
         } else {
-            product = "";
+            product.clear();
         }
-        if( product != "" ) {
+        if( !product.empty() ) {
             item result( product, calendar::turn );
             result.charges = item_it.charges;
             //g->m.add_item( examp, result );
@@ -3817,7 +3817,7 @@ void smoker_finalize(player &, const tripoint &examp)
     g->m.furn_set( examp, next_smoker_type );
 }
 
-void smoker_load_food( player &p, const tripoint &examp, units::volume remaining_capacity )
+void smoker_load_food( player &p, const tripoint &examp, const units::volume &remaining_capacity )
 {
     std::vector<item_comp> comps;
     std::list<item> moved;

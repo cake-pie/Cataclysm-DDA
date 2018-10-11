@@ -7582,8 +7582,7 @@ item::reload_option player::select_ammo( const item& base, bool prompt ) const
     for( const auto e : opts ) {
         for( item_location& ammo : find_ammo( *e ) ) {
             // don't try to unload frozen liquids
-            if( ammo->is_watertight_container() &&
-                ammo->contents.front().made_of( SOLID ) ) {
+            if( ammo->is_watertight_container() && ammo->contents_made_of( SOLID ) ) {
                 continue;
             }
             auto id = ( ammo->is_ammo_container() || ammo->is_watertight_container() )
@@ -7769,7 +7768,7 @@ ret_val<bool> player::can_wear( const item& it  ) const
 
 ret_val<bool> player::can_wield( const item &it ) const
 {
-    if( it.made_of( LIQUID, true ) ) {
+    if( it.made_of_from_type( LIQUID ) ) {
         return ret_val<bool>::make_failure( _( "Can't wield spilt liquids." ) );
     }
 
@@ -12050,7 +12049,7 @@ void player::place_corpse()
     g->m.add_item_or_charges( pos(), body );
 }
 
-void player::place_corpse( tripoint om_target )
+void player::place_corpse( const tripoint &om_target )
 {
     tinymap bay;
     bay.load( om_target.x * 2, om_target.y * 2, om_target.z, false );

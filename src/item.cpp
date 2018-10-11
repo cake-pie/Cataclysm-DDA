@@ -2398,6 +2398,9 @@ nc_color item::color_in_inventory() const
                 u.get_skill_level( tmp.skill ) >= tmp.req &&
                 u.get_skill_level( tmp.skill ) < tmp.level ) {
                 ret = c_light_blue;
+            } else if( type->can_use( "MA_MANUAL" ) &&
+                       !u.has_martialart( martial_art_learned_from( *type ) ) ) {
+                ret = c_light_blue;
             } else if( tmp.skill && // Book can't improve skill right now, but maybe later: pink
                        u.get_skill_level_object( tmp.skill ).can_train() &&
                        u.get_skill_level( tmp.skill ) < tmp.level ) {
@@ -2594,7 +2597,7 @@ std::string item::tname( unsigned int quantity, bool with_prefix ) const
     }
 
     std::string burntext;
-    if( with_prefix && !made_of( LIQUID, true ) ) {
+    if( with_prefix && !made_of_from_type( LIQUID ) ) {
         if( volume() >= 1000_ml && burnt * 125_ml >= volume() ) {
             burntext = pgettext( "burnt adjective", "badly burnt " );
         } else if( burnt > 0 ) {
@@ -3453,7 +3456,7 @@ int item::get_encumber() const
     return get_encumber_when_containing( contents_volume );
 }
 
-int item::get_encumber_when_containing( units::volume contents_volume ) const
+int item::get_encumber_when_containing( const units::volume &contents_volume ) const
 {
     const auto t = find_armor_data();
     if( t == nullptr ) {
@@ -3990,15 +3993,25 @@ bool item::made_of( const material_id &mat_ident ) const
     return std::find( materials.begin(), materials.end(), mat_ident ) != materials.end();
 }
 
-bool item::made_of( phase_id phase, bool from_itype ) const
+bool item::contents_made_of( const phase_id phase ) const
+{
+    return !contents.empty() && contents.front().made_of( phase );
+}
+
+bool item::made_of( phase_id phase ) const
 {
     if( is_null() ) {
         return false;
     }
-    if( from_itype ) {
-        return type->phase == phase;
-    }
     return current_phase == phase;
+}
+
+bool item::made_of_from_type( phase_id phase ) const
+{
+    if( is_null() ) {
+        return false;
+    }
+    return type->phase == phase;
 }
 
 bool item::conductive() const
@@ -4286,7 +4299,7 @@ bool item::can_unload_liquid() const
     }
 
     const item &cts = contents.front();
-    if( !is_bucket() && cts.made_of( LIQUID, true ) && cts.made_of( SOLID ) ) {
+    if( !is_bucket() && cts.made_of_from_type( LIQUID ) && cts.made_of( SOLID ) ) {
         return false;
     }
 
@@ -4431,7 +4444,7 @@ bool item::spill_contents( Character &c )
 
     while( !contents.empty() ) {
         on_contents_changed();
-        if( contents.front().made_of( LIQUID ) ) {
+        if( contents_made_of( LIQUID ) ) {
             if( !g->handle_liquid_from_container( *this, 1 ) ) {
                 return false;
             }
@@ -5379,7 +5392,7 @@ bool item::reload( player &u, item_location loc, long qty )
         ammo->charges -= qty;
 
     } else if( is_watertight_container() ) {
-        if( !ammo->made_of( LIQUID, true ) ) {
+        if( !ammo->made_of_from_type( LIQUID ) ) {
             debugmsg( "Tried to reload liquid container with non-liquid." );
             return false;
         }
@@ -7024,7 +7037,7 @@ bool item::on_drop( const tripoint &pos, map &m )
 {
     // dropping liquids, even currently frozen ones, on the ground makes them
     // dirty
-    if( made_of( LIQUID, true ) && !m.has_flag( "LIQUIDCONT", pos ) &&
+    if( made_of_from_type( LIQUID ) && !m.has_flag( "LIQUIDCONT", pos ) &&
         !item_tags.count( "DIRTY" ) ) {
         item_tags.insert( "DIRTY" );
     }

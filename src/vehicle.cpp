@@ -1288,7 +1288,7 @@ int vehicle::install_part( int dx, int dy, const vehicle_part &new_part )
     return parts.size() - 1;
 }
 
-bool vehicle::find_rackable_vehicle( std::vector<std::vector<int>> list_of_racks )
+bool vehicle::find_rackable_vehicle( const std::vector<std::vector<int>> &list_of_racks )
 {
     for( auto this_bike_rack : list_of_racks ) {
         std::vector<vehicle *> carry_vehs;
@@ -1318,7 +1318,7 @@ bool vehicle::find_rackable_vehicle( std::vector<std::vector<int>> list_of_racks
     return false;
 }
 
-bool vehicle::merge_rackable_vehicle( vehicle *carry_veh, std::vector<int> rack_parts )
+bool vehicle::merge_rackable_vehicle( vehicle *carry_veh, const std::vector<int> &rack_parts )
 {
     struct mapping {
         std::vector<int> carry_parts_here;
@@ -1595,7 +1595,7 @@ void vehicle::remove_carried_flag()
     }
 }
 
-bool vehicle::remove_carried_vehicle( std::vector<int> carried_parts )
+bool vehicle::remove_carried_vehicle( const std::vector<int> &carried_parts )
 {
     if( carried_parts.empty() ) {
         return false;
@@ -1678,6 +1678,9 @@ bool vehicle::find_and_split_vehicles( int exclude )
     for( cnt = 0 ; cnt < 4 ; cnt++ ) {
         int test_part = -1;
         for( auto p : valid_parts ) {
+            if( parts[ p ].removed ) {
+                continue;
+            }
             if( checked_parts.find( p ) == checked_parts.end() ) {
                 test_part = p;
                 break;
@@ -1718,6 +1721,9 @@ bool vehicle::find_and_split_vehicles( int exclude )
                 std::vector<int> all_neighbor_parts = parts_at_relative( dx, dy );
                 int neighbor_struct_part = -1;
                 for( int p : all_neighbor_parts ) {
+                    if( parts[ p ].removed ) {
+                        continue;
+                    }
                     if( part_info( p ).location == part_location_structure ) {
                         neighbor_struct_part = p;
                         break;
@@ -1739,14 +1745,13 @@ bool vehicle::find_and_split_vehicles( int exclude )
         if( success ) {
             // update the active cache
             shift_parts( point( 0, 0 ) );
-            part_removal_cleanup();
             return true;
         }
     }
     return false;
 }
 
-void vehicle::relocate_passengers( std::vector<player *> passengers )
+void vehicle::relocate_passengers( const std::vector<player *> &passengers )
 {
     const auto boardables = parts_with_feature( "BOARDABLE" );
     for( player *passenger : passengers ) {
@@ -1770,9 +1775,9 @@ void vehicle::relocate_passengers( std::vector<player *> passengers )
 // @param new_mounts vector of vector of mount points. must have one vector for every vehicle*
 // in new_vehicles, and forces the part indices in new_vehs to be mounted on the new vehicle
 // at those mount points
-bool vehicle::split_vehicles( std::vector<std::vector <int>> new_vehs,
-                              std::vector<vehicle *> new_vehicles,
-                              std::vector<std::vector <point>> new_mounts )
+bool vehicle::split_vehicles( const std::vector<std::vector <int>> &new_vehs,
+                              const std::vector<vehicle *> &new_vehicles,
+                              const std::vector<std::vector <point>> &new_mounts )
 {
     bool did_split = false;
     size_t i = 0;
@@ -1883,7 +1888,7 @@ bool vehicle::split_vehicles( std::vector<std::vector <int>> new_vehs,
     return did_split;
 }
 
-bool vehicle::split_vehicles( std::vector<std::vector <int>> new_vehs )
+bool vehicle::split_vehicles( const std::vector<std::vector <int>> &new_vehs )
 {
     std::vector<vehicle *> null_vehicles;
     std::vector<std::vector <point>> null_mounts;
@@ -2644,8 +2649,7 @@ int vehicle::fuel_left( const itype_id &ftype, bool recurse ) const
     int fl = std::accumulate( parts.begin(), parts.end(), 0, [&ftype]( const int &lhs,
     const vehicle_part & rhs ) {
         // don't count frozen liquid
-        if( rhs.is_tank() && rhs.ammo_remaining() > 0 &&
-            rhs.base.contents.front().made_of( SOLID ) ) {
+        if( rhs.is_tank() && rhs.base.contents_made_of( SOLID ) ) {
             return static_cast<long>( lhs );
         }
         return lhs + ( rhs.ammo_current() == ftype ? rhs.ammo_remaining() : 0 );
@@ -4459,6 +4463,10 @@ bool vehicle::explode_fuel( int p, damage_type type )
 
 int vehicle::damage_direct( int p, int dmg, damage_type type )
 {
+    // Make sure p is within range and hasn't been removed already
+    if( ( static_cast<size_t>( p ) >= parts.size() ) || parts[p].removed ) {
+        return dmg;
+    }
     if( parts[p].is_broken() ) {
         return break_off( p, dmg );
     }
