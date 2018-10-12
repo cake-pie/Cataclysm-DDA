@@ -39,6 +39,7 @@
 #include "inventory.h"
 #include "craft_command.h"
 #include "material.h"
+#include "options.h"
 
 #include <sstream>
 #include <algorithm>
@@ -1482,12 +1483,14 @@ void iexamine::flower_dahlia(player &p, const tripoint &examp)
     // But those were useless, don't re-add until they get useful
 }
 
-static bool harvest_common( player &p, const tripoint &examp, bool furn, bool nectar )
+static bool harvest_common( player &p, const tripoint &examp, bool furn, bool nectar, bool auto_forage = false )
 {
     const auto hid = g->m.get_harvest( examp );
     if( hid.is_null() || hid->empty() ) {
-        p.add_msg_if_player( m_info, _( "Nothing can be harvested from this plant in current season" ) );
-        iexamine::none( p, examp );
+        if( !auto_forage ) {
+            p.add_msg_if_player( m_info, _( "Nothing can be harvested from this plant in current season" ) );
+            iexamine::none( p, examp );
+        }
         return false;
     }
 
@@ -1499,7 +1502,7 @@ static bool harvest_common( player &p, const tripoint &examp, bool furn, bool ne
         return false;
     }
 
-    if( p.is_player() && !query_yn(_("Pick %s?"), furn ? g->m.furnname( examp ).c_str() : g->m.tername( examp ).c_str() ) ) {
+    if( p.is_player() && !auto_forage && !query_yn(_("Pick %s?"), furn ? g->m.furnname( examp ).c_str() : g->m.tername( examp ).c_str() ) ) {
         iexamine::none( p, examp );
         return false;
     }
@@ -1547,7 +1550,8 @@ void iexamine::harvest_ter_nectar( player &p, const tripoint &examp )
 
 void iexamine::harvest_ter( player &p, const tripoint &examp )
 {
-    if( harvest_common( p, examp, false, false ) ) {
+    bool auto_forage = get_option<bool>( "AUTO_FEATURES" ) && ( get_option<std::string>( "AUTO_FORAGING" ) == "both" || get_option<std::string>( "AUTO_FORAGING" ) == "trees" );
+    if( harvest_common( p, examp, false, false, auto_forage ) ) {
         g->m.ter_set( examp, g->m.get_ter_transforms_into( examp ) );
     }
 }
@@ -1971,8 +1975,13 @@ void iexamine::kiln_empty(player &p, const tripoint &examp)
     if( !p.has_charges( "fire" , 1 ) ) {
         add_msg( _("This kiln is ready to be fired, but you have no fire source.") );
         return;
-    } else if( !query_yn( _("Fire the kiln?") ) ) {
-        return;
+    } else {
+        add_msg( _( "This kiln contains %s %s of material, and is ready to be fired." ),
+                 format_volume( total_volume ), volume_units_abbr() );
+        g->draw_sidebar_messages(); // flush messages before popup
+        if( !query_yn( _( "Fire the kiln?" ) ) ) {
+            return;
+        }
     }
 
     p.use_charges( "fire", 1 );
@@ -2037,13 +2046,17 @@ void iexamine::kiln_full(player &, const tripoint &examp)
     result.charges = total_volume / char_type->volume;
     g->m.add_item( examp, result );
     g->m.furn_set( examp, next_kiln_type);
+    add_msg( _( "It has finished burning, yielding %d charcoal." ), result.charges );
 }
 
 void iexamine::fvat_empty(player &p, const tripoint &examp)
 {
     itype_id brew_type;
+    std::string brew_nname;
     bool to_deposit = false;
+    static const auto vat_volume = units::from_liter( 50 );
     bool vat_full = false;
+    bool ferment = false;
     bool brew_present = false;
     int charges_on_ground = 0;
     auto items = g->m.i_at(examp);
@@ -2060,6 +2073,7 @@ void iexamine::fvat_empty(player &p, const tripoint &examp)
         }
     }
     if( !brew_present ) {
+        add_msg( _( "This keg is empty." ) );
         // @todo: Allow using brews from crafting inventory
         const auto b_inv = p.items_with( []( const item &it ) {
             return it.is_brewable();
@@ -2075,11 +2089,12 @@ void iexamine::fvat_empty(player &p, const tripoint &examp)
         for( auto &b : b_inv ) {
             if( std::find( b_types.begin(), b_types.end(), b->typeId() ) == b_types.end() ) {
                 b_types.push_back( b->typeId() );
-                b_names.push_back( b->tname() );
+                b_names.push_back( item::nname( b->typeId() ) );
             }
         }
         // Choose brew from list
         int b_index = 0;
+        g->draw_sidebar_messages(); // flush messages before popup
         if (b_types.size() > 1) {
             b_index = uilist( _("Use which brew?"), b_names );
         } else { //Only one brew type was in inventory, so it's automatically used
@@ -2092,17 +2107,43 @@ void iexamine::fvat_empty(player &p, const tripoint &examp)
         }
         to_deposit = true;
         brew_type = b_types[b_index];
+        brew_nname = item::nname( brew_type );
     } else {
         item &brew = g->m.i_at(examp).front();
         brew_type = brew.typeId();
+        brew_nname = item::nname( brew_type );
         charges_on_ground = brew.charges;
-        if (p.charges_of(brew_type) > 0)
-            if (query_yn(_("Add %s to the vat?"), brew.tname().c_str())) {
+        add_msg( _( "This keg contains %s (%d), %0.f%% full." ),
+                 brew.tname().c_str(), brew.charges, brew.volume() * 100.0 / vat_volume );
+        g->draw_sidebar_messages(); // flush messages before popup
+        enum options { ADD_BREW, REMOVE_BREW, START_FERMENT };
+        uilist selectmenu;
+        selectmenu.text = _( "Select an action" );
+        selectmenu.addentry( ADD_BREW, ( p.charges_of( brew_type ) > 0 ), MENU_AUTOASSIGN,
+                             string_format( _( "Add more %s to the vat" ), brew_nname.c_str() ) );
+        selectmenu.addentry( REMOVE_BREW, brew.made_of( LIQUID ), MENU_AUTOASSIGN,
+                             string_format( _( "Remove %s from the vat" ), brew.tname().c_str() ) );
+        selectmenu.addentry( START_FERMENT, true, MENU_AUTOASSIGN, _( "Start fermenting cycle" ) );
+        selectmenu.query();
+        switch( selectmenu.ret ) {
+            case ADD_BREW: {
                 to_deposit = true;
+                break;
             }
+            case REMOVE_BREW: {
+                g->handle_liquid_from_ground( g->m.i_at( examp ).begin(), examp );
+                return;
+            }
+            case START_FERMENT: {
+                ferment = true;
+                break;
+            }
+            default:
+                add_msg( _( "Never mind." ) );
+                return;
+        }
     }
     if (to_deposit) {
-        static const auto vat_volume = units::from_liter( 50 );
         item brew(brew_type, 0);
         int charges_held = p.charges_of(brew_type);
         brew.charges = charges_on_ground;
@@ -2113,13 +2154,19 @@ void iexamine::fvat_empty(player &p, const tripoint &examp)
                 vat_full = true;
             }
         }
-        add_msg(_("Set %s in the vat."), brew.tname().c_str());
+        add_msg( _( "Set %s in the vat." ), brew_nname.c_str() );
+        add_msg( _( "The keg now contains %s (%d), %0.f%% full." ),
+                 brew.tname().c_str(), brew.charges, brew.volume() * 100.0 / vat_volume );
         g->m.i_clear(examp);
         //This is needed to bypass NOITEM
         g->m.add_item( examp, brew );
         p.moves -= 250;
+        if( !vat_full ) {
+            g->draw_sidebar_messages(); // flush messages before popup
+            ferment = query_yn( _( "Start fermenting cycle?" ) );
+        }
     }
-    if (vat_full || query_yn(_("Start fermenting cycle?"))) {
+    if (vat_full || ferment) {
         g->m.i_at( examp ).front().set_age( 0 );
         g->m.furn_set(examp, f_fvat_full);
         if (vat_full) {
@@ -2158,7 +2205,7 @@ void iexamine::fvat_full( player &p, const tripoint &examp )
     // Does the vat contain unfermented brew, or already fermented booze?
     // @todo: Allow "recursive brewing" to continue without player having to check on it
     if( brew_i.is_brewable() ) {
-        add_msg( _("There's a vat full of %s set to ferment there."), brew_i.tname().c_str() );
+        add_msg( _("There's a vat of %s set to ferment there."), brew_i.tname().c_str() );
 
         //@todo: change brew_time to return time_duration
         const time_duration brew_time = brew_i.brewing_time();
@@ -2175,6 +2222,7 @@ void iexamine::fvat_full( player &p, const tripoint &examp )
             return;
         }
 
+        g->draw_sidebar_messages(); // flush messages before popup
         if( query_yn(_("Finish brewing?") ) ) {
             const auto results = brew_i.brewing_results();
 
@@ -2183,7 +2231,7 @@ void iexamine::fvat_full( player &p, const tripoint &examp )
                 // @todo: Different age based on settings
                 item booze( result, brew_i.birthday(), brew_i.charges );
                 g->m.add_item( examp, booze );
-                if( booze.made_of( LIQUID ) ) {
+                if( booze.made_of_from_type( LIQUID ) ) {
                     add_msg( _("The %s is now ready for bottling."), booze.tname().c_str() );
                 }
             }
@@ -2193,10 +2241,12 @@ void iexamine::fvat_full( player &p, const tripoint &examp )
         }
 
         return;
+    } else {
+        add_msg( _("There's a vat of fermented %s there."), brew_i.tname().c_str() );
     }
 
-    const std::string booze_name = g->m.i_at( examp ).front().tname();
-    if( g->handle_liquid_from_ground( g->m.i_at( examp ).begin(), examp ) ) {
+    const std::string booze_name = items_here.front().tname();
+    if( g->handle_liquid_from_ground( items_here.begin(), examp ) ) {
         g->m.furn_set( examp, f_fvat_empty );
         add_msg(_("You squeeze the last drops of %s from the vat."), booze_name.c_str());
     }
@@ -2221,6 +2271,8 @@ bool iexamine::has_keg( const tripoint &pos )
 
 void iexamine::keg(player &p, const tripoint &examp)
 {
+    none( p,examp );
+    const auto keg_name = g->m.name( examp );
     units::volume keg_cap = get_keg_capacity( examp );
     bool liquid_present = false;
     for (int i = 0; i < (int)g->m.i_at(examp).size(); i++) {
@@ -2233,12 +2285,13 @@ void iexamine::keg(player &p, const tripoint &examp)
         }
     }
     if( !liquid_present ) {
+        add_msg( m_info, _( "It is empty." ) );
         // Get list of all drinks
         auto drinks_inv = p.items_with( []( const item &it ) {
             return it.made_of( LIQUID );
         } );
         if ( drinks_inv.empty() ) {
-            add_msg(m_info, _("You don't have any drinks to fill the %s with."), g->m.name(examp).c_str());
+            add_msg(m_info, _("You don't have any drinks to fill the %s with."), keg_name.c_str());
             return;
         }
         // Make lists of unique drinks... about third time we do this, maybe we ought to make a function next time
@@ -2249,7 +2302,7 @@ void iexamine::keg(player &p, const tripoint &examp)
             auto found_drink = std::find( drink_types.begin(), drink_types.end(), drink->typeId() );
             if( found_drink == drink_types.end() ) {
                 drink_types.push_back( drink->typeId() );
-                drink_names.push_back( drink->tname()) ;
+                drink_names.push_back( item::nname( drink->typeId() ) );
                 drink_rot.push_back( drink->get_relative_rot() );
             } else {
                 auto rot_iter = std::next( drink_rot.begin(), std::distance( drink_types.begin(), found_drink ) );
@@ -2259,6 +2312,7 @@ void iexamine::keg(player &p, const tripoint &examp)
         }
         // Choose drink to store in keg from list
         int drink_index = 0;
+        g->draw_sidebar_messages(); // flush messages before popup
         if( drink_types.size() > 1 ) {
             drink_index = uilist( _( "Store which drink?" ), drink_names );
             if( drink_index < 0 || static_cast<size_t>( drink_index ) >= drink_types.size() ) {
@@ -2266,7 +2320,7 @@ void iexamine::keg(player &p, const tripoint &examp)
             }
         } else { //Only one drink type was in inventory, so it's automatically used
             if( !query_yn( _( "Fill the %1$s with %2$s?" ),
-                           g->m.name( examp ).c_str(), drink_names[0].c_str() ) ) {
+                           keg_name.c_str(), drink_names[0].c_str() ) ) {
                 drink_index = -1;
             }
         }
@@ -2287,10 +2341,10 @@ void iexamine::keg(player &p, const tripoint &examp)
         }
         if( keg_full ) {
             add_msg( _( "You completely fill the %1$s with %2$s." ),
-                    g->m.name( examp ).c_str(), drink.tname().c_str() );
+                    keg_name.c_str(), item::nname( drink_type ).c_str() );
         } else {
-            add_msg( _( "You fill the %1$s with %2$s." ), g->m.name( examp ).c_str(),
-                    drink.tname().c_str() );
+            add_msg( _( "You fill the %1$s with %2$s." ),
+                    keg_name.c_str(), item::nname( drink_type ).c_str() );
         }
         p.moves -= 250;
         g->m.i_clear( examp );
@@ -2298,6 +2352,9 @@ void iexamine::keg(player &p, const tripoint &examp)
         return;
     } else {
         auto drink = g->m.i_at(examp).begin();
+        const auto drink_tname = drink->tname();
+        const auto drink_nname = item::nname( drink->typeId() );
+        g->draw_sidebar_messages(); // flush messages before popup
         enum options {
             FILL_CONTAINER,
             HAVE_A_DRINK,
@@ -2305,22 +2362,21 @@ void iexamine::keg(player &p, const tripoint &examp)
             EXAMINE,
         };
         uilist selectmenu;
-        selectmenu.addentry( FILL_CONTAINER, true, MENU_AUTOASSIGN, _("Fill a container with %s"),
-                            drink->tname().c_str() );
-        selectmenu.addentry( HAVE_A_DRINK, drink->is_food(), MENU_AUTOASSIGN, _("Have a drink") );
+        selectmenu.addentry( FILL_CONTAINER, drink->made_of( LIQUID ), MENU_AUTOASSIGN,
+                             _("Fill a container with %s"), drink_tname.c_str() );
+        selectmenu.addentry( HAVE_A_DRINK, drink->is_food() && drink->made_of( LIQUID ),
+                             MENU_AUTOASSIGN, _("Have a drink") );
         selectmenu.addentry( REFILL, true, MENU_AUTOASSIGN, _("Refill") );
         selectmenu.addentry( EXAMINE, true, MENU_AUTOASSIGN, _("Examine") );
 
         selectmenu.text = _("Select an action");
         selectmenu.query();
 
-        const auto drink_name = drink->tname();
-
         switch( selectmenu.ret ) {
         case FILL_CONTAINER:
             if( g->handle_liquid_from_ground( drink, examp ) ) {
-                add_msg(_("You squeeze the last drops of %1$s from the %2$s."), drink_name.c_str(),
-                        g->m.name(examp).c_str());
+                add_msg(_("You squeeze the last drops of %1$s from the %2$s."),
+                        drink_tname.c_str(), keg_name.c_str());
             }
             return;
 
@@ -2330,37 +2386,35 @@ void iexamine::keg(player &p, const tripoint &examp)
             }
 
             if (drink->charges == 0) {
-                add_msg(_("You squeeze the last drops of %1$s from the %2$s."), drink->tname().c_str(),
-                        g->m.name(examp).c_str());
+                add_msg(_("You squeeze the last drops of %1$s from the %2$s."),
+                        drink_tname.c_str(), keg_name.c_str());
                 g->m.i_clear( examp );
             }
             p.moves -= 250;
             return;
 
         case REFILL: {
-            int charges_held = p.charges_of(drink->typeId());
             if( drink->volume() >= keg_cap ) {
-                add_msg(_("The %s is completely full."), g->m.name(examp).c_str());
+                add_msg(_("The %s is completely full."), keg_name.c_str());
                 return;
             }
+            int charges_held = p.charges_of(drink->typeId());
             if (charges_held < 1) {
                 add_msg(m_info, _("You don't have any %1$s to fill the %2$s with."),
-                        drink->tname().c_str(), g->m.name(examp).c_str());
+                        drink_nname.c_str(), keg_name.c_str());
                 return;
             }
             item tmp( drink->typeId(), calendar::turn, charges_held );
             pour_into_keg( examp, tmp );
             p.use_charges( drink->typeId(), charges_held - tmp.charges );
-            add_msg(_("You fill the %1$s with %2$s."), g->m.name(examp).c_str(),
-                    drink->tname().c_str());
+            add_msg(_("You fill the %1$s with %2$s."), keg_name.c_str(), drink_nname.c_str());
             p.moves -= 250;
             return;
         }
 
         case EXAMINE: {
-            add_msg(m_info, _("That is a %s."), g->m.name(examp).c_str());
             add_msg(m_info, _("It contains %s (%d), %0.f%% full."),
-                    drink->tname().c_str(), drink->charges, drink->volume() * 100.0 / keg_cap );
+                    drink_tname.c_str(), drink->charges, drink->volume() * 100.0 / keg_cap );
             return;
         }
 
@@ -2389,7 +2443,7 @@ bool iexamine::pour_into_keg( const tripoint &pos, item &liquid )
         g->m.i_at( pos ).front().charges = 0; // Will be set later
     } else if( stack.front().typeId() != liquid.typeId() ) {
         add_msg( _( "The %s already contains some %s, you can't add a different liquid to it." ),
-                 keg_name.c_str(), stack.front().tname().c_str() );
+                 keg_name.c_str(), item::nname( stack.front().typeId() ).c_str() );
         return false;
     }
 
@@ -2410,7 +2464,8 @@ bool iexamine::pour_into_keg( const tripoint &pos, item &liquid )
 void pick_plant(player &p, const tripoint &examp,
                 const std::string &itemType, ter_id new_ter, bool seeds)
 {
-    if( p.is_player() && !query_yn( _( "Harvest the %s?" ), g->m.tername( examp ).c_str() ) ) {
+    bool auto_forage = get_option<bool>( "AUTO_FEATURES" ) && get_option<std::string>( "AUTO_FORAGING" ) != "off";
+    if( p.is_player() && !auto_forage && !query_yn( _( "Harvest the %s?" ), g->m.tername( examp ).c_str() ) ) {
         iexamine::none( p, examp );
         return;
     }
@@ -2647,6 +2702,7 @@ void iexamine::shrub_wildveggies( player &p, const tripoint &examp )
     move_cost /= rng( std::max( 4, p.per_cur ), 4 + p.per_cur * 2 );
     p.assign_activity( activity_id( "ACT_FORAGE" ), move_cost, 0 );
     p.activity.placement = examp;
+    p.activity.auto_resume = true;
     return;
 }
 
@@ -3973,7 +4029,7 @@ void iexamine::smoker_options( player &p, const tripoint &examp )
     int minutes_left = 0;
     units::volume f_volume = 0;
     bool f_check = false;
-    
+
     for( size_t i = 0; i < items_here.size(); i++ ) {
         auto &it = items_here[i];
         if( it.is_food() ) {
@@ -4003,9 +4059,9 @@ void iexamine::smoker_options( player &p, const tripoint &examp )
     smenu.addentry( 0, true, 'i', _( "Inspect smoking rack" ) );
 
     if( !active ) {
-        smenu.addentry_desc( 1, !empty && has_enough_coal, 'l', 
+        smenu.addentry_desc( 1, !empty && has_enough_coal, 'l',
                              empty ?  _( "Light up and smoke food... insert some food for smoking first" ) :
-                             !has_enough_coal ? string_format( _( "Light up and smoke food... need extra %d charges of charcoal" ), 
+                             !has_enough_coal ? string_format( _( "Light up and smoke food... need extra %d charges of charcoal" ),
                                                                need_charges - coal_charges ) :
                              _( "Light up and smoke food" ),
                              _( "Light up the smoking rack and start smoking. Smoking will take about 6 hours." ) );
@@ -4020,20 +4076,20 @@ void iexamine::smoker_options( player &p, const tripoint &examp )
             smenu.addentry( 4, f_check, 'e', _( "Remove food from smoking rack" ) );
         }
 
-        smenu.addentry_desc( 3, has_coal_in_inventory, 'r', 
+        smenu.addentry_desc( 3, has_coal_in_inventory, 'r',
                              !has_coal_in_inventory ? _( "Reload with charcoal... you don't have any" ) :
                              _( "Reload with charcoal" ),
-                             string_format( _( "You need %d charges of charcoal for %s %s of food. Minimal amount of charcoal is %d charges." ), 
+                             string_format( _( "You need %d charges of charcoal for %s %s of food. Minimal amount of charcoal is %d charges." ),
                                             sm_rack::CHARCOAL_PER_LITER, format_volume( 1000_ml ), volume_units_long(), sm_rack::MIN_CHARCOAL ) );
     } else {
-        smenu.addentry_desc( 7, true, 'x', 
+        smenu.addentry_desc( 7, true, 'x',
                              _( "Quench burning charcoal" ),
                              _( "Quenching will stop smoking process, but also destroy all used charcoal." ) );
     }
 
     if( has_coal ) {
-        smenu.addentry( 5, true, 'c', 
-                        active ? string_format( _( "Rake out %d excess charges of charcoal from smoking rack" ), coal_charges ) : 
+        smenu.addentry( 5, true, 'c',
+                        active ? string_format( _( "Rake out %d excess charges of charcoal from smoking rack" ), coal_charges ) :
                         string_format( _( "Remove %d charges of charcoal from smoking rack" ), coal_charges ) );
     }
 
@@ -4057,7 +4113,7 @@ void iexamine::smoker_options( player &p, const tripoint &examp )
                 }
             } else {
                 pop << "<color_green>" << _( "There's a smoking rack here." ) << "</color>" << "\n";
-            }          
+            }
             pop << "<color_green>" << _( "You inspect its contents and find: " ) << "</color>" << "\n \n ";
             if( items_here.empty() ) {
                 pop << "... that it is empty.";
@@ -4068,11 +4124,11 @@ void iexamine::smoker_options( player &p, const tripoint &examp )
                         pop << "\n " << "<color_red>" << _( "You see some smoldering embers there." ) << "</color>" << "\n ";
                         continue;
                     }
-                    pop << "-> " << it.nname( it.typeId(), it.charges ); 
+                    pop << "-> " << it.nname( it.typeId(), it.charges );
                     pop << " (" << std::to_string( it.charges ) << ") \n ";
                 }
             }
-            popup( pop.str(), PF_NONE ); 
+            popup( pop.str(), PF_NONE );
             break;
         }
         case 1: //activate

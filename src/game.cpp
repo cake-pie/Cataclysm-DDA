@@ -2077,7 +2077,7 @@ int game::inventory_item_menu( int pos, int iStartX, int iWidth,
         std::vector<iteminfo> vThisItem;
         std::vector<iteminfo> vDummy;
 
-        const bool bHPR = get_auto_pickup().has_rule( oThisItem.tname( 1, false ) );
+        const bool bHPR = get_auto_pickup().has_rule( &oThisItem );
         const hint_rating rate_drop_item = u.weapon.has_flag( "NO_UNWIELD" ) ? HINT_CANT : HINT_GOOD;
 
         int max_text_length = 0;
@@ -2230,14 +2230,14 @@ int game::inventory_item_menu( int pos, int iStartX, int iWidth,
                     break;
                 case '+':
                     if( !bHPR ) {
-                        get_auto_pickup().add_rule( oThisItem.tname( 1, false ) );
+                        get_auto_pickup().add_rule( &oThisItem );
                         add_msg( m_info, _( "'%s' added to character pickup rules." ), oThisItem.tname( 1,
                                  false ).c_str() );
                     }
                     break;
                 case '-':
                     if( bHPR ) {
-                        get_auto_pickup().remove_rule( oThisItem.tname( 1, false ) );
+                        get_auto_pickup().remove_rule( &oThisItem );
                         add_msg( m_info, _( "'%s' removed from character pickup rules." ), oThisItem.tname( 1,
                                  false ).c_str() );
                     }
@@ -2399,7 +2399,10 @@ input_context get_default_mode_input_context()
 #endif
     ctxt.register_action( "toggle_pixel_minimap" );
     ctxt.register_action( "reload_tileset" );
+    ctxt.register_action( "toggle_auto_features" );
     ctxt.register_action( "toggle_auto_pulp_butcher" );
+    ctxt.register_action( "toggle_auto_mining" );
+    ctxt.register_action( "toggle_auto_foraging" );
     ctxt.register_action( "action_menu" );
     ctxt.register_action( "main_menu" );
     ctxt.register_action( "item_action_menu" );
@@ -8945,6 +8948,7 @@ bool game::plfire()
     bool lost_weapon = ( args.held && &u.weapon != args.relevant );
     bool failed_check = !plfire_check( args );
     if( lost_weapon || failed_check ) {
+        u.cancel_activity();
         return false;
     }
 
@@ -10161,8 +10165,8 @@ bool game::plmove( int dx, int dy, int dz )
 
     if( !u.has_effect( effect_stunned ) && !u.is_underwater() ) {
         int turns;
-        if( get_option<bool>( "AUTO_MINING" ) && m.has_flag( "MINEABLE", dest_loc ) &&
-            u.weapon.has_flag( "DIG_TOOL" ) ) {
+        if( get_option<bool>( "AUTO_FEATURES" ) && mostseen == 0 && get_option<bool>( "AUTO_MINING" ) &&
+            m.has_flag( "MINEABLE", dest_loc ) && u.weapon.has_flag( "DIG_TOOL" ) ) {
             if( u.weapon.has_flag( "POWERED" ) ) {
                 if( u.weapon.ammo_sufficient() ) {
                     turns = MINUTES( 30 );
@@ -10726,9 +10730,33 @@ void game::place_player( const tripoint &dest_loc )
     // Important: don't use dest_loc after this line. `update_map` may have shifted the map
     // and dest_loc was not adjusted and therefore is still in the un-shifted system and probably wrong.
 
-    //Auto pulp or butcher
-    if( get_option<bool>( "AUTO_PULP_BUTCHER" ) && mostseen == 0 ) {
-        const std::string pulp_butcher = get_option<std::string>( "AUTO_PULP_BUTCHER_ACTION" );
+    //Auto pulp or butcher and Auto foraging
+    if( get_option<bool>( "AUTO_FEATURES" ) && mostseen == 0 ) {
+        static const direction adjacentDir[8] = { NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST };
+
+        const std::string forage_type = get_option<std::string>( "AUTO_FORAGING" );
+        if( forage_type != "off" ) {
+            static const auto forage = [&]( const tripoint & pos ) {
+                const auto &xter_t = m.ter( pos ).obj().examine;
+                const bool forage_bushes = forage_type == "both" || forage_type == "bushes";
+                const bool forage_trees = forage_type == "both" || forage_type == "trees";
+                if( xter_t == &iexamine::none ) {
+                    return;
+                } else if( ( forage_bushes && xter_t == &iexamine::shrub_marloss ) ||
+                           ( forage_bushes && xter_t == &iexamine::shrub_wildveggies ) ||
+                           ( forage_trees && xter_t == &iexamine::tree_marloss ) ||
+                           ( forage_trees && xter_t == &iexamine::harvest_ter )
+                         ) {
+                    xter_t( u, pos );
+                }
+            };
+
+            for( auto &elem : adjacentDir ) {
+                forage( u.pos() + direction_XY( elem ) );
+            }
+        }
+
+        const std::string pulp_butcher = get_option<std::string>( "AUTO_PULP_BUTCHER" );
         if( pulp_butcher == "butcher" && u.max_quality( quality_id( "BUTCHER" ) ) > INT_MIN ) {
             std::vector<int> corpses;
             auto items = m.i_at( u.pos() );
@@ -10759,13 +10787,12 @@ void game::place_player( const tripoint &dest_loc )
                 }
             };
 
-            pulp( u.pos() );
-
             if( pulp_butcher == "pulp_adjacent" ) {
-                static const direction adjacentDir[8] = { NORTH, NORTHEAST, EAST, SOUTHEAST, SOUTH, SOUTHWEST, WEST, NORTHWEST };
                 for( auto &elem : adjacentDir ) {
                     pulp( u.pos() + direction_XY( elem ) );
                 }
+            } else {
+                pulp( u.pos() );
             }
         }
     }

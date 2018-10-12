@@ -569,12 +569,16 @@ void trapfunc::goo( Creature *c, const tripoint &p )
                 n->check_dead_state();
             }
         } else if( z != nullptr ) {
-            if( z->type->id == mon_blob ) {
-                z->set_speed_base( z->get_speed_base() + 15 );
-                z->set_hp( z->get_speed() );
-            } else {
-                z->poly( mon_blob );
+            //All monsters except for blobs get a speed decrease
+            if( z->type->id != mon_blob ) {
                 z->set_speed_base( z->get_speed_base() - 15 );
+                //All monsters that aren't blobs or robots transform into a blob
+                if( !z->type->in_species( ROBOT ) ) {
+                    z->poly( mon_blob );
+                    z->set_hp( z->get_speed() );
+                }
+            } else {
+                z->set_speed_base( z->get_speed_base() + 15 );
                 z->set_hp( z->get_speed() );
             }
         }
@@ -835,16 +839,13 @@ void trapfunc::lava( Creature *c, const tripoint &p )
         } else if( z != nullptr ) {
             // MATERIALS-TODO: use fire resistance
             int dam = 30;
-            if( z->made_of( material_id( "flesh" ) ) || z->made_of( material_id( "iflesh" ) ) ) {
+            if( z->made_of_any( Creature::cmat_flesh ) ) {
                 dam = 50;
             }
             if( z->made_of( material_id( "veggy" ) ) ) {
                 dam = 80;
             }
-            if( z->made_of( material_id( "paper" ) ) || z->made_of( LIQUID ) ||
-                z->made_of( material_id( "powder" ) ) ||
-                z->made_of( material_id( "wood" ) )  || z->made_of( material_id( "cotton" ) ) ||
-                z->made_of( material_id( "wool" ) ) ) {
+            if( z->made_of( LIQUID ) || z->made_of_any( Creature::cmat_flammable ) ) {
                 dam = 200;
             }
             if( z->made_of( material_id( "stone" ) ) ) {
