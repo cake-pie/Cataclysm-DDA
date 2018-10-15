@@ -369,136 +369,6 @@ std::string dialogue::dynamic_line( const talk_topic &the_topic ) const
     if( topic == "TALK_NONE" || topic == "TALK_DONE" ) {
         return _( "Bye." );
 
-    } else if( topic == "TALK_GUARD" ) {
-        switch( rng( 1, 5 ) ) {
-            case 1:
-                return _( "I'm not in charge here, you're looking for someone else..." );
-            case 2:
-                return _( "Keep civil or I'll bring the pain." );
-            case 3:
-                return _( "Just on watch, move along." );
-            case 4:
-                if( g->u.male ) {
-                    return _( "Sir." );
-                } else {
-                    return _( "Ma'am" );
-                }
-            case 5:
-                if( g->u.male ) {
-                    return _( "Rough out there, isn't it?" );
-                } else {
-                    return _( "Ma'am, you really shouldn't be traveling out there." );
-                }
-        }
-    } else if( topic == "TALK_MISSION_LIST" ) {
-        if( p->chatbin.missions.empty() ) {
-            if( missions_assigned.empty() ) {
-                return _( "I don't have any jobs for you." );
-            } else {
-                return _( "I don't have any more jobs for you." );
-            }
-        } else if( p->chatbin.missions.size() == 1 ) {
-            if( missions_assigned.empty() ) {
-                return _( "I just have one job for you.  Want to hear about it?" );
-            } else {
-                return _( "I have another job for you.  Want to hear about it?" );
-            }
-        } else if( missions_assigned.empty() ) {
-            return _( "I have several jobs for you.  Which should I describe?" );
-        } else {
-            return _( "I have several more jobs for you.  Which should I describe?" );
-        }
-
-    } else if( topic == "TALK_MISSION_LIST_ASSIGNED" ) {
-        if( missions_assigned.empty() ) {
-            return _( "You're not working on anything for me right now." );
-        } else if( missions_assigned.size() == 1 ) {
-            return _( "What about it?" );
-        } else {
-            return _( "Which job?" );
-        }
-
-    } else if( topic == "TALK_MISSION_REWARD" ) {
-        return _( "Sure, here you go!" );
-
-    } else if( topic == "TALK_OLD_GUARD_SOLDIER" ) {
-        if( g->u.is_wearing( "badge_marshal" ) )
-            switch( rng( 1, 4 ) ) {
-                case 1:
-                    return _( "Hello, marshal." );
-                case 2:
-                    return _( "Marshal, I'm afraid I can't talk now." );
-                case 3:
-                    return _( "I'm not in charge here, marshal." );
-                case 4:
-                    return _( "I'm supposed to direct all questions to my leadership, marshal." );
-            }
-        switch( rng( 1, 5 ) ) {
-            case 1:
-                return _( "Hey, citizen... I'm not sure you belong here." );
-            case 2:
-                return _( "You should mind your own business, nothing to see here." );
-            case 3:
-                return _( "If you need something you'll need to talk to someone else." );
-            case 4:
-                if( g->u.male ) {
-                    return _( "Sir." );
-                } else {
-                    return _( "Ma'am" );
-                }
-            case 5:
-                if( g->u.male ) {
-                    return _( "Dude, if you can hold your own you should look into enlisting." );
-                } else {
-                    return _( "Hey miss, don't you think it would be safer if you stuck with me?" );
-                }
-        }
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_CPT" ) {
-        if( g->u.has_trait( trait_PROF_FED ) ) {
-            return _( "Marshal, I hope you're here to assist us." );
-        }
-        if( g->u.male ) {
-            return _( "Sir, I don't know how the hell you got down here but if you have any sense you'll get out while you can." );
-        }
-        return _( "Ma'am, I don't know how the hell you got down here but if you have any sense you'll get out while you can." );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_CPT_GOAL" ) {
-        return _( "I'm leading what remains of my company on a mission to re-secure this facility.  We entered the complex with two "
-                  "dozen men and immediately went about securing this control room.  From here I dispatched my men to secure vital "
-                  "systems located on this floor and the floors below this one.  If  we are successful, this facility can be cleared "
-                  "and used as a permanent base of operations in the region.  Most importantly it will allow us to redirect refugee "
-                  "traffic away from overcrowded outposts and free up more of our forces to conduct recovery operations." );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_CPT_VAULT" ) {
-        return _( "This facility was constructed to provide a safe haven in the event of a global conflict.  The vault can support "
-                  "several thousand people for a few years if all systems are operational and sufficient notification is given.  "
-                  "Unfortunately, the power system was damaged or sabotaged at some point and released a single extremely lethal "
-                  "burst of radiation.  The catastrophic event lasted for several minutes and resulted in the deaths of most people "
-                  "located on the 2nd and lower floors.  Those working on this floor were able to seal the access ways to the "
-                  "lower floors before succumbing to radiation sickness.  The only other thing the logs tell us is that all water "
-                  "pressure was diverted to the lower levels." );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_COMMO" ) {
-        if( g->u.has_trait( trait_PROF_FED ) ) {
-            return _( "Marshal, I'm rather surprised to see you here." );
-        }
-        if( g->u.male ) {
-            return _( "Sir you are not authorized to be here... you should leave." );
-        }
-        return _( "Ma'am you are not authorized to be here... you should leave." );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_COMMO_GOAL" ) {
-        return _( "We are securing the external communications array for this facility.  I'm rather restricted in what I can release"
-                  "... go find my commander if you have any questions." );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_COMMO_FREQ" ) {
-        return _( "I was expecting the captain to send a runner.  Here is the list you are looking for.  What we can identify from here are simply the "
-                  "frequencies that have traffic on them.  Many of the transmissions are indecipherable without repairing or "
-                  "replacing the equipment here.  When the facility was being overrun, standard procedure was to destroy encryption "
-                  "hardware to protect federal secrets and maintain the integrity of the comms network.  We are hoping a few plain "
-                  "text messages can get picked up though." );
-
     } else if( topic == "TALK_DELIVER_ASK" ) {
         return bulk_trade_inquire( *p, the_topic.item_type );
 
@@ -871,22 +741,18 @@ std::string dialogue::dynamic_line( const talk_topic &the_topic ) const
                           topic.c_str() );
 }
 
-talk_response &dialogue::add_response_first( const std::string &text, const std::string &r )
+talk_response &dialogue::add_response( const std::string &text, const std::string &r, const bool first )
 {
-    responses.insert( responses.begin(), talk_response() );
-    talk_response &result = responses.front();
+    talk_response result = talk_response();
     result.text = text;
     result.success.next_topic = talk_topic( r );
-    return result;
-}
-
-talk_response &dialogue::add_response( const std::string &text, const std::string &r )
-{
-    responses.push_back( talk_response() );
-    talk_response &result = responses.back();
-    result.text = text;
-    result.success.next_topic = talk_topic( r );
-    return result;
+    if( first ) {
+    responses.insert( responses.begin(), result );
+    return responses.front();
+    } else {
+    responses.push_back( result );
+    return responses.back();
+    }
 }
 
 talk_response &dialogue::add_response_done( const std::string &text )
@@ -900,68 +766,57 @@ talk_response &dialogue::add_response_none( const std::string &text )
 }
 
 talk_response &dialogue::add_response( const std::string &text, const std::string &r,
-                                       talkfunction_ptr effect_success )
+                                       talkfunction_ptr effect_success, const bool first )
 {
-    talk_response &result = add_response( text, r );
+    talk_response &result = add_response( text, r, first );
     result.success.set_effect( effect_success );
     return result;
 }
 
 talk_response &dialogue::add_response( const std::string &text, const std::string &r,
                                        std::function<void( npc & )> effect_success,
-                                       dialogue_consequence consequence )
+                                       dialogue_consequence consequence, const bool first )
 {
-    talk_response &result = add_response( text, r );
+    talk_response &result = add_response( text, r, first );
     result.success.set_effect_consequence( effect_success, consequence );
     return result;
 }
 
-talk_response &dialogue::add_response_first( const std::string &text, const std::string &r,
-                                            mission *miss )
+talk_response &dialogue::add_response( const std::string &text, const std::string &r,
+                                       mission *miss, const bool first )
 {
     if( miss == nullptr ) {
         debugmsg( "tried to select null mission" );
     }
-    talk_response &result = add_response_first( text, r );
+    talk_response &result = add_response( text, r, first );
     result.mission_selected = miss;
     return result;
 }
 
 talk_response &dialogue::add_response( const std::string &text, const std::string &r,
-                                       mission *miss )
+                                       const skill_id &skill, const bool first )
 {
-    if( miss == nullptr ) {
-        debugmsg( "tried to select null mission" );
-    }
-    talk_response &result = add_response( text, r );
-    result.mission_selected = miss;
-    return result;
-}
-
-talk_response &dialogue::add_response( const std::string &text, const std::string &r,
-                                       const skill_id &skill )
-{
-    talk_response &result = add_response( text, r );
+    talk_response &result = add_response( text, r, first );
     result.skill = skill;
     return result;
 }
 
 talk_response &dialogue::add_response( const std::string &text, const std::string &r,
-                                       const martialart &style )
+                                       const martialart &style, const bool first )
 {
-    talk_response &result = add_response( text, r );
+    talk_response &result = add_response( text, r, first );
     result.style = style.id;
     return result;
 }
 
 talk_response &dialogue::add_response( const std::string &text, const std::string &r,
-                                       const itype_id &item_type )
+                                       const itype_id &item_type, const bool first )
 {
     if( item_type == "null" ) {
         debugmsg( "explicitly specified null item" );
     }
 
-    talk_response &result = add_response( text, r );
+    talk_response &result = add_response( text, r, first );
     result.success.next_topic.item_type = item_type;
     return result;
 }
@@ -982,62 +837,26 @@ void dialogue::gen_responses( const talk_topic &the_topic )
     // Can be nullptr! Check before dereferencing
     mission *miss = p->chatbin.mission_selected;
 
-    if( topic == "TALK_GUARD" ) {
-        add_response_done( _( "Don't mind me..." ) );
-
-    } else if( topic == "TALK_MISSION_LIST" ) {
-        if( p->chatbin.missions.empty() ) {
-            add_response_none( _( "Oh, okay." ) );
-        } else if( p->chatbin.missions.size() == 1 ) {
-            add_response( _( "Tell me about it." ), "TALK_MISSION_OFFER",  p->chatbin.missions.front() );
-            add_response_none( _( "Never mind, I'm not interested." ) );
+    if( topic == "TALK_MISSION_LIST" ) {
+        if( p->chatbin.missions.size() == 1 ) {
+            add_response( _( "Tell me about it." ), "TALK_MISSION_OFFER",  p->chatbin.missions.front(), true );
         } else {
             for( auto &mission : p->chatbin.missions ) {
-                add_response( mission->get_type().name, "TALK_MISSION_OFFER", mission );
+                add_response( mission->get_type().name, "TALK_MISSION_OFFER", mission, true );
             }
-            add_response_none( _( "Never mind, I'm not interested." ) );
         }
-
     } else if( topic == "TALK_MISSION_LIST_ASSIGNED" ) {
-        if( missions_assigned.empty() ) {
-            add_response_none( _( "Never mind then." ) );
-        } else if( missions_assigned.size() == 1 ) {
+        if( missions_assigned.size() == 1 ) {
             add_response( _( "I have news." ), "TALK_MISSION_INQUIRE", missions_assigned.front() );
-            add_response_none( _( "Never mind." ) );
         } else {
             for( auto &miss_it : missions_assigned ) {
                 add_response( miss_it->get_type().name, "TALK_MISSION_INQUIRE", miss_it );
             }
-            add_response_none( _( "Never mind." ) );
         }
-
-    } else if( topic == "TALK_MISSION_DESCRIBE" ) {
-        add_response( _( "What's the matter?" ), "TALK_MISSION_OFFER" );
-        add_response( _( "I don't care." ), "TALK_MISSION_REJECTED" );
-
-    } else if( topic == "TALK_MISSION_OFFER" ) {
-        add_response( _( "I'll do it!" ), "TALK_MISSION_ACCEPTED", &talk_function::assign_mission );
-        add_response( _( "Not interested." ), "TALK_MISSION_REJECTED" );
-
-    } else if( topic == "TALK_MISSION_ACCEPTED" ) {
-        add_response_none( _( "Not a problem." ) );
-        add_response( _( "Got any advice?" ), "TALK_MISSION_ADVICE" );
-        add_response( _( "Can you share some equipment?" ), "TALK_SHARE_EQUIPMENT" );
-        add_response_done( _( "I'll be back soon!" ) );
-
-    } else if( topic == "TALK_MISSION_ADVICE" ) {
-        add_response_none( _( "Sounds good, thanks." ) );
-        add_response_done( _( "Sounds good.  Bye!" ) );
-
-    } else if( topic == "TALK_MISSION_REJECTED" ) {
-        add_response_none( _( "I'm sorry." ) );
-        add_response_done( _( "Whatever.  Bye." ) );
-
     } else if( topic == "TALK_MISSION_INQUIRE" ) {
-        const auto mission = p->chatbin.mission_selected;
-        if( mission == nullptr ) {
+        if( miss == nullptr ) {
             debugmsg( "dialogue::gen_responses(\"TALK_MISSION_INQUIRE\") called for null mission" );
-        } else if( mission->has_failed() ) {
+        } else if( miss->has_failed() ) {
             RESPONSE( _( "I'm sorry... I failed." ) );
             SUCCESS( "TALK_MISSION_FAILURE" );
             SUCCESS_OPINION( -1, 0, -1, 1, 0 );
@@ -1046,9 +865,9 @@ void dialogue::gen_responses( const talk_topic &the_topic )
             SUCCESS( "TALK_NONE" );
             FAILURE( "TALK_MISSION_FAILURE" );
             FAILURE_OPINION( -3, 0, -1, 2, 0 );
-        } else if( !mission->is_complete( p->getID() ) ) {
+        } else if( !miss->is_complete( p->getID() ) ) {
             add_response_none( _( "Not yet." ) );
-            if( mission->get_type().goal == MGOAL_KILL_MONSTER ) {
+            if( miss->get_type().goal == MGOAL_KILL_MONSTER ) {
                 RESPONSE( _( "Yup, I killed it." ) );
                 TRIAL( TALK_TRIAL_LIE, 10 + p->op_of_u.trust * 5 );
                 SUCCESS( "TALK_MISSION_SUCCESS" );
@@ -1060,7 +879,7 @@ void dialogue::gen_responses( const talk_topic &the_topic )
             add_response_done( _( "No.  I'll get back to it, bye!" ) );
         } else {
             // TODO: Lie about mission
-            switch( mission->get_type().goal ) {
+            switch( miss->get_type().goal ) {
                 case MGOAL_FIND_ITEM:
                 case MGOAL_FIND_ANY_ITEM:
                     add_response( _( "Yup!  Here it is!" ), "TALK_MISSION_SUCCESS",
@@ -1123,134 +942,8 @@ void dialogue::gen_responses( const talk_topic &the_topic )
         SUCCESS_ACTION( &talk_function::clear_mission );
         SUCCESS_OPINION( mission_value / 4, -1,
                          mission_value / 3, -1, 0 );
-
-    } else if( topic == "TALK_MISSION_SUCCESS_LIE" ) {
-        add_response( _( "Well, um, sorry." ), "TALK_NONE", &talk_function::clear_mission );
-
-    } else if( topic == "TALK_MISSION_FAILURE" ) {
-        add_response_none( _( "I'm sorry.  I did what I could." ) );
-
-    } else if( topic == "TALK_MISSION_REWARD" ) {
-        add_response( _( "Thank you." ), "TALK_NONE", &talk_function::clear_mission );
-        add_response( _( "Thanks, bye." ), "TALK_DONE", &talk_function::clear_mission );
-
-    } else if( topic == "TALK_EVAC_MERCHANT" ) {
-        if( p->has_trait( trait_id( "NPC_MISSION_LEV_1" ) ) ) {
-            add_response( _( "I figured you might be looking for some help..." ), "TALK_EVAC_MERCHANT" );
-            p->companion_mission_role_id = "REFUGEE MERCHANT";
-            SUCCESS_ACTION( &talk_function::companion_mission );
-        }
-
-    } else if( topic == "TALK_EVAC_MERCHANT_PLANS2" ) {
-        ///\EFFECT_INT >11 adds useful dialog option in TALK_EVAC_MERCHANT
-        if( g->u.int_cur >= 12 ) {
-            add_response(
-                _( "[INT 12] Wait, six buses and refugees... how many people do you still have crammed in here?" ),
-                "TALK_EVAC_MERCHANT_PLANS3" );
-        }
-
-    } else if( topic == "TALK_EVAC_MERCHANT_ASK_JOIN" ) {
-        ///\EFFECT_INT >10 adds bad dialog option in TALK_EVAC_MERCHANT (NEGATIVE)
-        if( g->u.int_cur > 10 ) {
-            add_response(
-                _( "[INT 11] I'm sure I can organize salvage operations to increase the bounty scavengers bring in!" ),
-                "TALK_EVAC_MERCHANT_NO" );
-        }
-        ///\EFFECT_INT <7 allows bad dialog option in TALK_EVAC_MERCHANT
-
-        ///\EFFECT_STR >10 allows bad dialog option in TALK_EVAC_MERCHANT
-        if( g->u.int_cur <= 6 && g->u.str_cur > 10 ) {
-            add_response( _( "[STR 11] I punch things in face real good!" ), "TALK_EVAC_MERCHANT_NO" );
-        }
-
-    } else if( topic == "TALK_EVAC_GUARD3_HIDE2" ) {
-        RESPONSE( _( "Get bent, traitor!" ) );
-        TRIAL( TALK_TRIAL_INTIMIDATE, 20 + p->op_of_u.fear * 3 );
-        SUCCESS( "TALK_EVAC_GUARD3_HOSTILE" );
-        FAILURE( "TALK_EVAC_GUARD3_INSULT" );
-        RESPONSE( _( "Got something to hide?" ) );
-        TRIAL( TALK_TRIAL_PERSUADE, 10 + p->op_of_u.trust * 3 );
-        SUCCESS( "TALK_EVAC_GUARD3_DEAD" );
-        FAILURE( "TALK_EVAC_GUARD3_INSULT" );
-
-    } else if( topic == "TALK_EVAC_GUARD3_HOSTILE" ) {
-        p->my_fac->likes_u -= 15;//The Free Merchants are insulted by your actions!
-        p->my_fac->respects_u -= 15;
-        p->my_fac = g->faction_manager_ptr->get( faction_id( "hells_raiders" ) );
-
-    } else if( topic == "TALK_EVAC_GUARD3_INSULT" ) {
-        p->my_fac->likes_u -= 5;//The Free Merchants are insulted by your actions!
-        p->my_fac->respects_u -= 5;
-
-    } else if( topic == "TALK_EVAC_GUARD3_DEAD" ) {
-        p->my_fac = g->faction_manager_ptr->get( faction_id( "hells_raiders" ) );
-
-    } else if( topic == "TALK_OLD_GUARD_SOLDIER" ) {
-        add_response_done( _( "Don't mind me..." ) );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_CPT" ) {
-        if( g->u.has_trait( trait_PROF_FED ) ) {
-            add_response( _( "What are you doing down here?" ), "TALK_OLD_GUARD_NEC_CPT_GOAL" );
-            add_response( _( "Can you tell me about this facility?" ), "TALK_OLD_GUARD_NEC_CPT_VAULT" );
-            add_response( _( "What do you need done?" ), "TALK_MISSION_LIST" );
-            if( p->chatbin.missions_assigned.size() == 1 ) {
-                add_response( _( "About the mission..." ), "TALK_MISSION_INQUIRE" );
-            } else if( p->chatbin.missions_assigned.size() >= 2 ) {
-                add_response( _( "About one of those missions..." ), "TALK_MISSION_LIST_ASSIGNED" );
-            }
-        }
-        add_response_done( _( "I've got to go..." ) );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_CPT_GOAL" ) {
-        add_response( _( "Seems like a decent plan..." ), "TALK_OLD_GUARD_NEC_CPT" );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_CPT_VAULT" ) {
-        add_response( _( "Whatever they did it must have worked since we are still alive..." ),
-                      "TALK_OLD_GUARD_NEC_CPT" );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_COMMO" ) {
-        if( g->u.has_trait( trait_PROF_FED ) ) {
-            for( auto miss_it : g->u.get_active_missions() ) {
-                if( miss_it->mission_id() == mission_type_id( "MISSION_OLD_GUARD_NEC_1" ) &&
-                    !p->has_effect( effect_gave_quest_item ) ) {
-                    add_response( _( "[MISSION] The captain sent me to get a frequency list from you." ),
-                                  "TALK_OLD_GUARD_NEC_COMMO_FREQ" );
-                }
-            }
-            add_response( _( "What are you doing here?" ), "TALK_OLD_GUARD_NEC_COMMO_GOAL" );
-            add_response( _( "Do you need any help?" ), "TALK_MISSION_LIST" );
-            if( p->chatbin.missions_assigned.size() == 1 ) {
-                add_response( _( "About the mission..." ), "TALK_MISSION_INQUIRE" );
-            } else if( p->chatbin.missions_assigned.size() >= 2 ) {
-                add_response( _( "About one of those missions..." ), "TALK_MISSION_LIST_ASSIGNED" );
-            }
-        }
-        add_response_done( _( "I should be going..." ) );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_COMMO_GOAL" ) {
-        add_response( _( "I'll try and find your commander then..." ), "TALK_OLD_GUARD_NEC_COMMO" );
-
-    } else if( topic == "TALK_OLD_GUARD_NEC_COMMO_FREQ" ) {
-        popup( _( "%1$s gives you a %2$s" ), p->name.c_str(), item( "necropolis_freq",
-                0 ).tname().c_str() );
-        g->u.i_add( item( "necropolis_freq", 0 ) );
-        p->add_effect( effect_gave_quest_item, 9999_turns ); //@todo choose sane duration
-        add_response( _( "Thanks." ), "TALK_OLD_GUARD_NEC_COMMO" );
-
-    } else if( topic == "TALK_SCAVENGER_MERC_HIRE" ) {
-        if( g->u.cash >= 800000 ) {
-            add_response( _( "[$8000] You have a deal." ), "TALK_SCAVENGER_MERC_HIRE_SUCCESS" );
-        }
-
-    } else if( topic == "TALK_SCAVENGER_MERC_HIRE_SUCCESS" ) {
-        if( g->u.cash < 800000 ) {
-            debugmsg( "Money appeared out of thin air! (or someone accidentally linked to this talk_topic)" );
-        } else {
-            g->u.cash -= 800000;
-        }
-
     } else if( topic == "TALK_FREE_MERCHANT_STOCKS" ) {
-        add_response( _( "Who are you?" ), "TALK_FREE_MERCHANT_STOCKS_NEW" );
+        add_response( _( "Who are you?" ), "TALK_FREE_MERCHANT_STOCKS_NEW", true );
         static const std::vector<itype_id> wanted = {{
                 "jerky", "meat_smoked", "fish_smoked",
                 "cooking_oil", "cornmeal", "flour",
@@ -1261,7 +954,7 @@ void dialogue::gen_responses( const talk_topic &the_topic )
         for( const auto &id : wanted ) {
             if( g->u.charges_of( id ) > 0 ) {
                 const std::string msg = string_format( _( "Delivering %s." ), item::nname( id ).c_str() );
-                add_response( msg, "TALK_DELIVER_ASK", id );
+                add_response( msg, "TALK_DELIVER_ASK", id, true );
             }
         }
 
@@ -2430,7 +2123,13 @@ void talk_response::effect_fun_t::set_u_add_effect( std::string &new_effect, std
         if( duration_str == "PERMANENT" ) {
             permanent = true;
         } else {
-            duration = std::stoi( duration_str );
+            try {
+                duration = std::stoi( duration_str );
+            } catch( const std::invalid_argument & ) {
+                debugmsg( "Invalid effect duration '%s'.", duration_str );
+            } catch( const std::out_of_range & ) {
+                debugmsg( "Effect duration '%s' out of range.", duration_str );
+            }
         }
         u.add_effect( efftype_id( new_effect ), time_duration::from_turns( duration ), num_bp, permanent );
     };
@@ -2445,7 +2144,13 @@ void talk_response::effect_fun_t::set_npc_add_effect( std::string &new_effect, s
         if( duration_str == "PERMANENT" ) {
             permanent = true;
         } else {
-            duration = std::stoi( duration_str );
+            try {
+                duration = std::stoi( duration_str );
+            } catch( const std::invalid_argument & ) {
+                debugmsg( "Invalid effect duration '%s'.", duration_str );
+            } catch( const std::out_of_range & ) {
+                debugmsg( "Effect duration '%s' out of range.", duration_str );
+            }
         }
         p.add_effect( efftype_id( new_effect ), time_duration::from_turns( duration ), num_bp, permanent );
     };

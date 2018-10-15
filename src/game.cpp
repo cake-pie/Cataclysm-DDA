@@ -10140,7 +10140,6 @@ bool game::plmove( int dx, int dy, int dz )
         if( u.has_active_mutation( trait_SHELL2 ) ) {
             add_msg( m_warning, _( "You can't move while in your shell.  Deactivate it to go mobile." ) );
         }
-
         return false;
     }
 
@@ -10166,7 +10165,7 @@ bool game::plmove( int dx, int dy, int dz )
     if( !u.has_effect( effect_stunned ) && !u.is_underwater() ) {
         int turns;
         if( get_option<bool>( "AUTO_FEATURES" ) && mostseen == 0 && get_option<bool>( "AUTO_MINING" ) &&
-            m.has_flag( "MINEABLE", dest_loc ) && u.weapon.has_flag( "DIG_TOOL" ) ) {
+            u.weapon.has_flag( "DIG_TOOL" ) && m.has_flag( "MINEABLE", dest_loc ) && !m.veh_at( dest_loc ) ) {
             if( u.weapon.has_flag( "POWERED" ) ) {
                 if( u.weapon.ammo_sufficient() ) {
                     turns = MINUTES( 30 );
