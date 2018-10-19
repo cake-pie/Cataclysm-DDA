@@ -485,9 +485,6 @@ std::string dialogue::dynamic_line( const talk_topic &the_topic ) const
     } else if( topic == "TALK_FRIEND_GUARD" ) {
         return _( "I'm on watch." );
 
-    } else if( topic == "TALK_CAMP_OVERSEER" ) {
-        return _( "Hey Boss..." );
-
     } else if( topic == "TALK_DENY_GUARD" ) {
         return _( "Not a bloody chance, I'm going to get left behind!" );
 
@@ -547,32 +544,6 @@ std::string dialogue::dynamic_line( const talk_topic &the_topic ) const
     } else if( topic == "TALK_AIM_RULES" ) {
         return _( "How should I aim?" );
 
-    } else if( topic == "TALK_STRANGER_NEUTRAL" ) {
-        return _( "Hello there." );
-
-    } else if( topic == "TALK_STRANGER_WARY" ) {
-        return _( "Okay, no sudden movements..." );
-
-    } else if( topic == "TALK_STRANGER_SCARED" ) {
-        return _( "Keep your distance!" );
-
-    } else if( topic == "TALK_STRANGER_FRIENDLY" ) {
-        return _( "Hey there, <name_g>." );
-
-    } else if( topic == "TALK_STRANGER_AGGRESSIVE" ) {
-        if( !g->u.unarmed_attack() ) {
-            return "<drop_it>";
-        } else {
-            return _( "This is my territory, <name_b>." );
-        }
-
-    } else if( topic == "TALK_MUG" ) {
-        if( !g->u.unarmed_attack() ) {
-            return "<drop_it>";
-        } else {
-            return "<hands_up>";
-        }
-
     } else if( topic == "TALK_DESCRIBE_MISSION" ) {
         switch( p->mission ) {
             case NPC_MISSION_SHELTER:
@@ -588,13 +559,6 @@ std::string dialogue::dynamic_line( const talk_topic &the_topic ) const
             default:
                 return "ERROR: Someone forgot to code an npc_mission text.";
         } // switch (p->mission)
-
-    } else if( topic == "TALK_WEAPON_DROPPED" ) {
-        std::string npcstr = p->male ? pgettext( "npc", "his" ) : pgettext( "npc", "her" );
-        return string_format( _( "*drops %s weapon." ), npcstr.c_str() );
-
-    } else if( topic == "TALK_DEMAND_LEAVE" ) {
-        return _( "Now get out of here, before I kill you." );
 
     } else if( topic == "TALK_SHOUT" ) {
         alpha->shout();
@@ -733,6 +697,7 @@ std::string dialogue::dynamic_line( const talk_topic &the_topic ) const
         return give_item_to( *p, false, true );
         // Maybe TODO: Allow an option to "just take it, use it if you want"
     } else if( topic == "TALK_MIND_CONTROL" ) {
+        p->companion_mission_role_id.clear();
         p->set_attitude( NPCATT_FOLLOW );
         return _( "YES, MASTER!" );
     }
@@ -1198,12 +1163,6 @@ void dialogue::gen_responses( const talk_topic &the_topic )
         add_response( _( "I need you to come with me." ), "TALK_FRIEND", &talk_function::stop_guard );
         add_response_done( _( "See you around." ) );
 
-    } else if( topic == "TALK_CAMP_OVERSEER" ) {
-        p->companion_mission_role_id = "FACTION_CAMP";
-        add_response( _( "What needs to be done?" ), "TALK_CAMP_OVERSEER", &talk_function::companion_mission );
-        add_response( _( "We're abandoning this camp." ), "TALK_DONE", &talk_function::remove_overseer );
-        add_response_done( _( "See you around." ) );
-
     } else if( topic == "TALK_FRIEND" || topic == "TALK_GIVE_ITEM" || topic == "TALK_USE_ITEM" ) {
         if( p->is_following() ) {
             add_response( _( "Combat commands..." ), "TALK_COMBAT_COMMANDS" );
@@ -1271,7 +1230,7 @@ void dialogue::gen_responses( const talk_topic &the_topic )
             add_response( _( "I'm going to go my own way for a while." ), "TALK_LEAVE" );
             add_response_done( _( "Let's go." ) );
 
-            add_response( _( "I want you to build a camp here." ), "TALK_DONE", &talk_function::become_overseer );
+            add_response( _( "Let's talk about faction camps." ), "TALK_CAMP_GENERAL" );
         }
 
         if( !p->is_following() ) {
@@ -1358,113 +1317,6 @@ void dialogue::gen_responses( const talk_topic &the_topic )
             }, dialogue_consequence::none );
         }
         add_response_none( _( "Never mind." ) );
-
-    } else if( topic == "TALK_STRANGER_NEUTRAL" || topic == "TALK_STRANGER_WARY" ||
-               topic == "TALK_STRANGER_SCARED" || topic == "TALK_STRANGER_FRIENDLY" ) {
-        if( topic == "TALK_STRANGER_NEUTRAL" || topic == "TALK_STRANGER_FRIENDLY" ) {
-            add_response( _( "Another survivor!  We should travel together." ), "TALK_SUGGEST_FOLLOW" );
-            add_response( _( "What are you doing?" ), "TALK_DESCRIBE_MISSION" );
-            add_response( _( "Care to trade?" ), "TALK_DONE", &talk_function::start_trade );
-            add_response_done( _( "Bye." ) );
-        } else {
-            if( !g->u.unarmed_attack() ) {
-                if( g->u.volume_carried() + g->u.weapon.volume() <= g->u.volume_capacity() ) {
-                    RESPONSE( _( "&Put away weapon." ) );
-                    SUCCESS( "TALK_STRANGER_NEUTRAL" );
-                    SUCCESS_ACTION( &talk_function::player_weapon_away );
-                    SUCCESS_OPINION( 2, -2, 0, 0, 0 );
-                    SUCCESS_ACTION( &talk_function::stranger_neutral );
-                }
-                RESPONSE( _( "&Drop weapon." ) );
-                SUCCESS( "TALK_STRANGER_NEUTRAL" );
-                SUCCESS_ACTION( &talk_function::player_weapon_drop );
-                SUCCESS_OPINION( 4, -3, 0, 0, 0 );
-            }
-            int diff = 50 + p->personality.bravery - 2 * p->op_of_u.fear + 2 * p->op_of_u.trust;
-            RESPONSE( _( "Don't worry, I'm not going to hurt you." ) );
-            TRIAL( TALK_TRIAL_PERSUADE, diff );
-            SUCCESS( "TALK_STRANGER_NEUTRAL" );
-            SUCCESS_OPINION( 1, -1, 0, 0, 0 );
-            SUCCESS_ACTION( &talk_function::stranger_neutral );
-            FAILURE( "TALK_DONE" );
-            FAILURE_ACTION( &talk_function::flee );
-        }
-        if( !p->unarmed_attack() ) {
-            RESPONSE( _( "Drop your weapon!" ) );
-            TRIAL( TALK_TRIAL_INTIMIDATE, 30 );
-            SUCCESS( "TALK_WEAPON_DROPPED" );
-            SUCCESS_ACTION( &talk_function::drop_weapon );
-            FAILURE( "TALK_DONE" );
-            FAILURE_ACTION( &talk_function::hostile );
-        }
-        RESPONSE( _( "Get out of here or I'll kill you." ) );
-        TRIAL( TALK_TRIAL_INTIMIDATE, 20 );
-        SUCCESS( "TALK_DONE" );
-        SUCCESS_ACTION( &talk_function::flee );
-        FAILURE( "TALK_DONE" );
-        FAILURE_ACTION( &talk_function::hostile );
-
-    } else if( topic == "TALK_STRANGER_AGGRESSIVE" || topic == "TALK_MUG" ) {
-        if( !g->u.unarmed_attack() ) {
-            int chance = 30 + p->personality.bravery - 3 * p->personality.aggression +
-                         2 * p->personality.altruism - 2 * p->op_of_u.fear +
-                         3 * p->op_of_u.trust;
-            RESPONSE( _( "Calm down.  I'm not going to hurt you." ) );
-            TRIAL( TALK_TRIAL_PERSUADE, chance );
-            SUCCESS( "TALK_STRANGER_WARY" );
-            SUCCESS_OPINION( 1, -1, 0, 0, 0 );
-            SUCCESS_ACTION( &talk_function::stranger_neutral );
-            FAILURE( "TALK_DONE" );
-            FAILURE_ACTION( &talk_function::hostile );
-            RESPONSE( _( "Screw you, no." ) );
-            TRIAL( TALK_TRIAL_INTIMIDATE, chance - 5 );
-            SUCCESS( "TALK_STRANGER_SCARED" );
-            SUCCESS_OPINION( -2, 1, 0, 1, 0 );
-            FAILURE( "TALK_DONE" );
-            FAILURE_ACTION( &talk_function::hostile );
-            RESPONSE( _( "&Drop weapon." ) );
-            if( topic == "TALK_MUG" ) {
-                SUCCESS( "TALK_MUG" );
-            } else {
-                SUCCESS( "TALK_DEMAND_LEAVE" );
-            }
-            SUCCESS_ACTION( &talk_function::player_weapon_drop );
-
-        } else if( topic == "TALK_MUG" ) {
-            int chance = 35 + p->personality.bravery - 3 * p->personality.aggression +
-                         2 * p->personality.altruism - 2 * p->op_of_u.fear +
-                         3 * p->op_of_u.trust;
-            RESPONSE( _( "Calm down.  I'm not going to hurt you." ) );
-            TRIAL( TALK_TRIAL_PERSUADE, chance );
-            SUCCESS( "TALK_STRANGER_WARY" );
-            SUCCESS_OPINION( 1, -1, 0, 0, 0 );
-            SUCCESS_ACTION( &talk_function::stranger_neutral );
-            FAILURE( "TALK_DONE" );
-            FAILURE_ACTION( &talk_function::hostile );
-            RESPONSE( _( "Screw you, no." ) );
-            TRIAL( TALK_TRIAL_INTIMIDATE, chance - 5 );
-            SUCCESS( "TALK_STRANGER_SCARED" );
-            SUCCESS_OPINION( -2, 1, 0, 1, 0 );
-            FAILURE( "TALK_DONE" );
-            FAILURE_ACTION( &talk_function::hostile );
-            add_response( _( "&Put hands up." ), "TALK_DONE", &talk_function::start_mugging );
-        }
-
-    } else if( topic == "TALK_DESCRIBE_MISSION" ) {
-        add_response_none( _( "I see." ) );
-        add_response_done( _( "Bye." ) );
-
-    } else if( topic == "TALK_WEAPON_DROPPED" ) {
-        RESPONSE( _( "Now get out of here." ) );
-        SUCCESS( "TALK_DONE" );
-        SUCCESS_OPINION( -1, -2, 0, -2, 0 );
-        SUCCESS_ACTION( &talk_function::flee );
-
-    } else if( topic == "TALK_DEMAND_LEAVE" ) {
-        RESPONSE( _( "Okay, I'm going." ) );
-        SUCCESS( "TALK_DONE" );
-        SUCCESS_OPINION( 0, -1, 0, 0, 0 );
-        SUCCESS_ACTION( &talk_function::player_leaving );
 
     } else if( topic == "TALK_SIZE_UP" || topic == "TALK_LOOK_AT" ||
                topic == "TALK_OPINION" || topic == "TALK_SHOUT" ) {
@@ -1720,12 +1572,8 @@ int topic_category( const talk_topic &the_topic )
     return -1; // Not grouped with other topics
 }
 
-void talk_function::become_overseer( npc &p )
+void talk_function::start_camp( npc &p )
 {
-    if( query_yn( _("Would you like to review the faction camp description?") ) ){
-        faction_camp_tutorial();
-    }
-
     const point omt_pos = ms_to_omt_copy( g->m.getabs( p.posx(), p.posy() ) );
     oter_id &omt_ref = overmap_buffer.ter( omt_pos.x, omt_pos.y, p.posz() );
 
@@ -1781,6 +1629,14 @@ void talk_function::become_overseer( npc &p )
         display = true;
         buffer = buffer + _("There are few fields.  Producing enough food to supply your camp may be difficult.\n");
     }
+    if( g->allies().size() < 2 ) {
+       if( !display ) {
+            buffer = _( "Warning, you need at least two allies to work a faction camp!\n" );
+       } else {
+            buffer = buffer + "\n" +  _( "Warning, you need at least two allies to work a faction camp!\n" );
+       }
+       display = true;
+    }
     if ( display && !query_yn( _("%s \nAre you sure you wish to continue? "), buffer )) {
         return;
     }
@@ -1790,7 +1646,23 @@ void talk_function::become_overseer( npc &p )
         popup( _("You weren't able to survey the camp site.") );
         return;
     }
+    become_overseer( p );
+}
 
+void talk_function::recover_camp( npc &p )
+{
+    const point omt_pos = ms_to_omt_copy( g->m.getabs( p.posx(), p.posy() ) );
+    oter_id &omt_ref = overmap_buffer.ter( omt_pos.x, omt_pos.y, p.posz() );
+    if( !om_min_level( "faction_base_camp_0", omt_ref.id().c_str() ) ){
+        popup( _("There is no faction camp here to recover!") );
+        return;
+    }
+    become_overseer( p );
+}
+
+
+void talk_function::become_overseer( npc &p )
+{
     add_msg( _( "%s has become a camp manager." ), p.name.c_str() );
     if( p.name.find( _(", Camp Manager") ) == std::string::npos ){
         p.name = p.name + _(", Camp Manager");
@@ -1804,10 +1676,15 @@ void talk_function::become_overseer( npc &p )
 
 void talk_function::remove_overseer( npc &p )
 {
-    if ( !query_yn( "This is permanent, any companions away on mission will be lost and the camp cannot be reclaimed!  Are "
-                   "you sure?") ) {
+    if ( !query_yn( "This is permanent, any companions away on mission will be lost until "
+                    "the camp is recovered! Are you sure?" ) ) {
         return;
     }
+    size_t suffix = p.name.find( _( ", Camp Manager" ) );
+    if( suffix != std::string::npos ){
+        p.name = p.name.substr( 0, suffix );
+    }
+
     add_msg( _( "%s has abandoned the camp." ), p.name.c_str() );
     p.companion_mission_role_id.clear();
     stop_guard(p);
@@ -2366,7 +2243,8 @@ void talk_response::effect_t::parse_string_effect( const std::string &type, Json
             WRAP( assign_base ),
             WRAP( assign_guard ),
             WRAP( stop_guard ),
-            WRAP( become_overseer ),
+            WRAP( start_camp ),
+            WRAP( recover_camp ),
             WRAP( remove_overseer ),
             WRAP( wake_up ),
             WRAP( reveal_stats ),
@@ -2578,6 +2456,30 @@ conditional_t::conditional_t( JsonObject jo )
         const std::string &effect = jo.get_string( "u_has_effect" );
         condition = [effect]( const dialogue & d ) {
             return d.alpha->has_effect( efftype_id( effect ) );
+        };
+    } else if( jo.has_string( "u_at_om_location" ) ) {
+        const std::string &location = jo.get_string( "u_at_om_location" );
+        condition = [location]( const dialogue & d ) {
+            const point omt_pos = ms_to_omt_copy( g->m.getabs( d.alpha->posx(), d.alpha->posy() ) );
+            oter_id &omt_ref = overmap_buffer.ter( omt_pos.x, omt_pos.y, d.alpha->posz() );
+            if( location == "FACTION_CAMP_ANY" ) {
+                return talk_function::om_min_level( "faction_base_camp_1", omt_ref.id().c_str() );
+            } else {
+                return omt_ref == oter_id( location );
+            }
+        };
+    } else if( jo.has_string( "npc_role_nearby" ) ) {
+        const std::string &role = jo.get_string( "npc_role_nearby" );
+        condition = [role]( const dialogue &d ) {
+            const std::vector<npc *> available = g->get_npcs_if( [&]( const npc & guy ) {
+                return d.alpha->posz() == guy.posz() && ( rl_dist( d.alpha->pos(), guy.pos() ) <= 48 ) && guy.companion_mission_role_id == role;
+            } );
+            return !available.empty();
+        };
+    } else if( jo.has_int( "npc_allies" ) ) {
+        const unsigned long min_allies = jo.get_int( "npc_allies" );
+        condition = [min_allies]( const dialogue & ) {
+            return g->allies().size() >= min_allies;
         };
     } else if( jo.has_int( "npc_service" ) ) {
         const unsigned long service_price = jo.get_int( "npc_service" );
@@ -2894,6 +2796,7 @@ std::string npc::pick_talk_topic( const player &u )
     ( void )u;
     if( personality.aggression > 0 ) {
         if( op_of_u.fear * 2 < personality.bravery && personality.altruism < 0 ) {
+            set_attitude( NPCATT_MUG );
             return "TALK_MUG";
         }
 
@@ -2915,6 +2818,7 @@ std::string npc::pick_talk_topic( const player &u )
         return "TALK_STRANGER_FRIENDLY";
     }
 
+    set_attitude( NPCATT_NULL );
     return "TALK_STRANGER_NEUTRAL";
 }
 

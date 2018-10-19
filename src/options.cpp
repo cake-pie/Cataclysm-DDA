@@ -1117,14 +1117,15 @@ void options_manager::init()
     mOptionsSort["interface"]++;
 
     add( "USE_CELSIUS", "interface", translate_marker( "Temperature units" ),
-         translate_marker( "Switch between Celsius and Fahrenheit." ),
-    { { "fahrenheit", translate_marker( "Fahrenheit" ) }, { "celsius", translate_marker( "Celsius" ) } },
+         translate_marker( "Switch between Celsius, Fahrenheit and Kelvin." ),
+    { { "fahrenheit", translate_marker( "Fahrenheit" ) }, { "celsius", translate_marker( "Celsius" ) }, { "kelvin", translate_marker( "Kelvin" ) } },
     "fahrenheit"
        );
 
     add( "USE_METRIC_SPEEDS", "interface", translate_marker( "Speed units" ),
-         translate_marker( "Switch between km/h and mph." ),
-    { { "mph", translate_marker( "mph" ) }, { "km/h", translate_marker( "km/h" ) } }, "mph"
+         translate_marker( "Switch between mph, km/h and tiles/turn." ),
+    { { "mph", translate_marker( "mph" ) }, { "km/h", translate_marker( "km/h" ) }, { "t/t", translate_marker( "tiles/turn" ) } },
+    "mph"
        );
 
     add( "USE_METRIC_WEIGHTS", "interface", translate_marker( "Mass units" ),
