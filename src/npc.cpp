@@ -937,7 +937,7 @@ bool npc::wear_if_wanted( const item &it )
     }
 
     if( splint ) {
-        return wear_item( it, false );
+        return !!wear_item( it, false );
     }
 
     const int it_encumber = it.get_encumber();
@@ -965,7 +965,7 @@ bool npc::wear_if_wanted( const item &it )
 
         if( encumb_ok && can_wear( it ).success() ) {
             // @todo: Hazmat/power armor makes this not work due to 1 boots/headgear limit
-            return wear_item( it, false );
+            return !!wear_item( it, false );
         }
         // Otherwise, maybe we should take off one or more items and replace them
         bool took_off = false;
@@ -2125,7 +2125,7 @@ void npc::on_load()
     } else if( has_effect( effect_bouldering ) ) {
         remove_effect( effect_bouldering );
     }
-    if( g->m.veh_at( pos() ).part_with_feature( VPFLAG_BOARDABLE ) && !in_vehicle ) {
+    if( g->m.veh_at( pos() ).part_with_feature( VPFLAG_BOARDABLE, true ) && !in_vehicle ) {
         g->m.board_vehicle( pos(), this );
     }
 }
