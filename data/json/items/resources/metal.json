@@ -335,7 +335,7 @@
     "symbol": "=",
     "color": "light_gray",
     "description": "A small spool of solder, able to be used in ammunition and electronics.",
-    "material": [ "steel" ],
+    "material": [ "tin", "lead" ],
     "volume": "50ml",
     "weight": "2 g",
     "//": "Density ~ 8g/cm³ ~ 2000kg/250ml @ stack 1000 = 2g/unit",
