@@ -6194,7 +6194,7 @@ void item::set_item_specific_energy( const float new_specific_energy )
     }
     if( new_item_temperature > temp_to_kelvin( temperatures::hot ) ) {
         item_tags.insert( "HOT" );
-    } else if( freeze_percentage > 0.5 ) {
+    } else if( freeze_percentage > 0.5 && ( !no_freezing || has_flag( "MELTS" ) ) ) {
         item_tags.insert( "FROZEN" );
         // If below freezing temp AND the food may have parasites AND food does not have "NO_PARASITES" tag then add the "NO_PARASITES" tag.
         if( new_item_temperature < freezing_temperature && type->comestible->parasites > 0 ) {
@@ -6269,7 +6269,7 @@ void item::set_item_temperature( float new_temperature )
     }
     if( new_temperature > temp_to_kelvin( temperatures::hot ) ) {
         item_tags.insert( "HOT" );
-    } else if( freeze_percentage > 0.5 ) {
+    } else if( freeze_percentage > 0.5 && ( !no_freezing || has_flag( "MELTS" ) ) ) {
         item_tags.insert( "FROZEN" );
         // If below freezing temp AND the food may have parasites AND food does not have "NO_PARASITES" tag then add the "NO_PARASITES" tag.
         if( new_temperature < freezing_temperature && type->comestible->parasites > 0 ) {
@@ -6805,7 +6805,7 @@ void item::calc_temp( const int temp, const float insulation, const time_duratio
     }
     if( new_item_temperature > temp_to_kelvin( temperatures::hot ) ) {
         item_tags.insert( "HOT" );
-    } else if( freeze_percentage > 0.5 ) {
+    } else if( freeze_percentage > 0.5 && ( !no_freezing || has_flag( "MELTS" ) ) ) {
         item_tags.insert( "FROZEN" );
         // If below freezing temp AND the food may have parasites AND food does not have "NO_PARASITES" tag then add the "NO_PARASITES" tag.
         if( new_item_temperature < freezing_temperature && type->comestible->parasites > 0 ) {
