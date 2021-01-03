@@ -6,11 +6,13 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <initializer_list>
 
 #include "color.h"
 #include "cursesdef.h"
-#include "enums.h"
+#include "point.h"
 #include "string_formatter.h"
+#include "translations.h"
 
 ////////////////////////////////////////////////////////////////////////////////////
 /**
@@ -21,14 +23,19 @@ const int UILIST_WAIT_INPUT = -1025;
 const int UILIST_UNBOUND = -1026;
 const int UILIST_CANCEL = -1027;
 const int UILIST_TIMEOUT = -1028;
+const int UILIST_ADDITIONAL = -1029;
 const int MENU_ALIGN_LEFT = -1;
 const int MENU_ALIGN_CENTER = 0;
 const int MENU_ALIGN_RIGHT = 1;
 const int MENU_WIDTH_ENTRIES = -2;
 const int MENU_AUTOASSIGN = -1;
+// NOLINTNEXTLINE(cata-use-named-point-constants)
+constexpr point MENU_AUTOASSIGN_POS( MENU_AUTOASSIGN, MENU_AUTOASSIGN );
 
 struct input_event;
 class input_context;
+
+catacurses::window new_centered_win( int nlines, int ncols );
 
 /**
  * mvwzstr: line of text with horizontal offset and color
@@ -38,7 +45,7 @@ struct mvwzstr {
     int left = 0;
     nc_color color = c_unset;
     std::string txt;
-    long sym = 0;
+    int sym = 0;
 };
 
 /**
@@ -88,7 +95,7 @@ struct uilist_entry {
 /**
  * Virtual base class for windowed ui stuff (like uilist)
  */
-class ui_container
+class ui_container // NOLINT(cata-xy)
 {
     public:
         virtual ~ui_container() = default;
@@ -114,7 +121,7 @@ class ui_container
  *     }
  *   }
  *   void select(int num, uilist * menu) {
- *       mvwprintz(menu->window, 0, 0, c_red, "( %s )",game_z[num]->name().c_str() );
+ *       mvwprintz(menu->window, 0, 0, c_red, "( %s )",game_z[num]->name() );
  *   }
  * }
  * uilist monmenu;
@@ -128,6 +135,7 @@ class ui_container
  *
  */
 class uilist;
+
 /**
 * uilist::query() handles most input events first,
 * and then passes the event to the callback if it can't handle it.
@@ -153,19 +161,17 @@ class uilist_callback
  * uilist: scrolling vertical list menu
  */
 
-class ui_element;
-class ui_element_input;
-
 class uilist: public ui_container
 {
     public:
         int ret;
+        std::string ret_act;
         int selected;
         int keypress;
         std::string text;
         std::vector<std::string> textformatted;
         std::string input_category;
-        std::vector< std::pair<std::string, std::string> > additional_actions;
+        std::vector<std::pair<std::string, translation>> additional_actions;
         int textwidth;
         int textalign;
         int max_entry_len;
@@ -175,6 +181,7 @@ class uilist: public ui_container
         std::map<int, int> keymap;
         bool desc_enabled;
         int desc_lines;
+        std::string footer_text; // basically the same as desc, except it doesn't change based on selection
         bool border;
         bool filtering;
         bool filtering_nocase;
@@ -184,24 +191,28 @@ class uilist: public ui_container
         nc_color hilight_color;
         nc_color hotkey_color;
         nc_color disabled_color;
-        int pad_left;
-        int pad_right;
-        bool allow_disabled; // return on selecting disabled entry, default false
-        bool allow_anykey; // return UILIST_UNBOUND on keys unbound & unhandled by callback, default false
-        bool allow_cancel; // return UILIST_CANCEL on "QUIT" action, default true
-        bool hilight_disabled;
-        bool hilight_full;
-        int vshift;
-        int vmax;
+        int pad_left = 0;
+        int pad_right = 0;
+        bool allow_disabled = false; // return on selecting disabled entry, default false
+        // return UILIST_UNBOUND on keys unbound & unhandled by callback, default false
+        bool allow_anykey = false;
+        bool allow_cancel = true; // return UILIST_CANCEL on "QUIT" action, default true
+        // return UILIST_ADDITIONAL if the input action is inside `additional_actions`
+        // and unhandled by callback, default false.
+        bool allow_additional = false;
+        bool hilight_disabled = false;
+        bool hilight_full = false;
+        int vshift = 0;
+        int vmax = 0;
         std::string filter;
         std::vector<int> fentries;
-        int fselected;
-        bool centered_scroll;
+        int fselected = 0;
+        bool centered_scroll = false;
 
-        bool scrollbar_auto;
+        bool scrollbar_auto = false;
         nc_color scrollbar_nopage_color;
         nc_color scrollbar_page_color;
-        int scrollbar_side;
+        int scrollbar_side = 0;
 
         uilist_callback *callback;
 
@@ -211,18 +222,18 @@ class uilist: public ui_container
         uilist( const std::string &msg, const std::vector<uilist_entry> &opts );
         uilist( const std::string &msg, const std::vector<std::string> &opts );
         uilist( const std::string &msg, std::initializer_list<const char *const> opts );
-        uilist( int startx, int width, int starty, const std::string &msg,
+        uilist( const point &start, int width, const std::string &msg,
                 const std::vector<uilist_entry> &opts );
-        uilist( int startx, int width, int starty, const std::string &msg,
+        uilist( const point &start, int width, const std::string &msg,
                 const std::vector<std::string> &opts );
-        uilist( int startx, int width, int starty, const std::string &msg,
+        uilist( const point &start, int width, const std::string &msg,
                 std::initializer_list<const char *const> opts );
 
         void init();
         void setup();
         void show();
         bool scrollby( int scrollby );
-        int scroll_amount_from_key( const int key );
+        int scroll_amount_from_key( int key );
         int scroll_amount_from_action( const std::string &action );
         void query( bool loop = true, int timeout = -1 );
         void filterlist();
@@ -232,8 +243,8 @@ class uilist: public ui_container
         void redraw( bool redraw_callback = true );
         void addentry( const std::string &str );
         void addentry( int r, bool e, int k, const std::string &str );
-        // K is templated so it matches a `char` literal and a `long` value.
-        // Using a fixed type (either `char` or `long`) will lead to ambiguity with the
+        // K is templated so it matches a `char` literal and a `int` value.
+        // Using a fixed type (either `char` or `int`) will lead to ambiguity with the
         // other overload when called with the wrong type.
         template<typename K, typename ...Args>
         void addentry( const int r, const bool e, K k, const char *const format, Args &&... args ) {
@@ -252,7 +263,7 @@ class uilist: public ui_container
         // pending refactor // ui_element_input * filter_input;
 
     private:
-        bool started;
+        bool started = false;
 
     protected:
         std::string hotkeys;

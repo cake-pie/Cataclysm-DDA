@@ -2,12 +2,15 @@
 
 #include <map>
 #include <unordered_map>
+#include <set>
+#include <utility>
+#include <vector>
 
 #include "anatomy.h"
 #include "debug.h"
 #include "generic_factory.h"
-#include "rng.h"
-#include "translations.h"
+#include "json.h"
+#include "pldata.h"
 
 side opposite_side( side s )
 {
@@ -18,6 +21,9 @@ side opposite_side( side s )
             return side::RIGHT;
         case side::RIGHT:
             return side::LEFT;
+        case side::num_sides:
+            debugmsg( "invalid side %d", static_cast<int>( s ) );
+            break;
     }
 
     return s;
@@ -26,20 +32,42 @@ side opposite_side( side s )
 namespace io
 {
 
-static const std::map<std::string, side> side_map = {{
-        { "left", side::LEFT },
-        { "right", side::RIGHT },
-        { "both", side::BOTH }
+template<>
+std::string enum_to_string<side>( side data )
+{
+    switch( data ) {
+        // *INDENT-OFF*
+        case side::LEFT: return "left";
+        case side::RIGHT: return "right";
+        case side::BOTH: return "both";
+        // *INDENT-ON*
+        case side::num_sides:
+            break;
     }
-};
+    debugmsg( "Invalid side" );
+    abort();
+}
 
 template<>
-side string_to_enum<side>( const std::string &data )
+std::string enum_to_string<hp_part>( hp_part data )
 {
-    return string_to_enum_look_up( side_map, data );
+    switch( data ) {
+        // *INDENT-OFF*
+        case hp_part::hp_head: return "head";
+        case hp_part::hp_torso: return "torso";
+        case hp_part::hp_arm_l: return "arm_l";
+        case hp_part::hp_arm_r: return "arm_r";
+        case hp_part::hp_leg_l: return "leg_l";
+        case hp_part::hp_leg_r: return "leg_r";
+        // *INDENT-ON*
+        case hp_part::num_hp_parts:
+            break;
+    }
+    debugmsg( "Invalid hp_part" );
+    abort();
 }
 
-}
+} // namespace io
 
 namespace
 {
@@ -48,7 +76,7 @@ generic_factory<body_part_struct> body_part_factory( "body part" );
 
 } // namespace
 
-body_part legacy_id_to_enum( const std::string &legacy_id )
+static body_part legacy_id_to_enum( const std::string &legacy_id )
 {
     static const std::unordered_map<std::string, body_part> body_parts = {
         { "TORSO", bp_torso },
@@ -140,24 +168,35 @@ const bodypart_ids &convert_bp( body_part bp )
     return body_parts[static_cast<size_t>( bp )];
 }
 
-const body_part_struct &get_bp( body_part bp )
+static const body_part_struct &get_bp( body_part bp )
 {
     return convert_bp( bp ).obj();
 }
 
-void body_part_struct::load_bp( JsonObject &jo, const std::string &src )
+void body_part_struct::load_bp( const JsonObject &jo, const std::string &src )
 {
     body_part_factory.load( jo, src );
 }
 
-void body_part_struct::load( JsonObject &jo, const std::string & )
+void body_part_struct::load( const JsonObject &jo, const std::string & )
 {
     mandatory( jo, was_loaded, "id", id );
 
     mandatory( jo, was_loaded, "name", name );
-    optional( jo, was_loaded, "name_plural", name_multiple );
-    mandatory( jo, was_loaded, "heading_singular", name_as_heading_singular );
-    mandatory( jo, was_loaded, "heading_plural", name_as_heading_multiple );
+    // This is NOT the plural of `name`; it's a name refering to the pair of
+    // bodyparts which this bodypart belongs to, and thus should not be implemented
+    // using "ngettext" or "translation::make_plural". Otherwise, in languages
+    // without plural forms, translation of this string would indicate it
+    // to be a left or right part, while it is not.
+    optional( jo, was_loaded, "name_multiple", name_multiple );
+
+    mandatory( jo, was_loaded, "accusative", accusative );
+    // same as the above comment
+    optional( jo, was_loaded, "accusative_multiple", accusative_multiple );
+
+    mandatory( jo, was_loaded, "heading", name_as_heading );
+    // Same as the above comment
+    mandatory( jo, was_loaded, "heading_multiple", name_as_heading_multiple );
     optional( jo, was_loaded, "hp_bar_ui_text", hp_bar_ui_text );
     mandatory( jo, was_loaded, "encumbrance_text", encumb_text );
     mandatory( jo, was_loaded, "hit_size", hit_size );
@@ -169,6 +208,8 @@ void body_part_struct::load( JsonObject &jo, const std::string & )
 
     mandatory( jo, was_loaded, "main_part", main_part );
     mandatory( jo, was_loaded, "opposite_part", opposite_part );
+
+    optional( jo, was_loaded, "bionic_slots", bionic_slots_, 0 );
 
     part_side = jo.get_enum_value<side>( "side" );
 }
@@ -227,34 +268,36 @@ void body_part_struct::check() const
 std::string body_part_name( body_part bp, int number )
 {
     const auto &bdy = get_bp( bp );
-    return ngettext( bdy.name.c_str(),
-                     bdy.name_multiple.c_str(), number );
+    // See comments in `body_part_struct::load` about why these two strings are
+    // not a single translation object with plural enabled.
+    return number > 1 ? bdy.name_multiple.translated() : bdy.name.translated();
 }
 
 std::string body_part_name_accusative( body_part bp, int number )
 {
     const auto &bdy = get_bp( bp );
-    return npgettext( "bodypart_accusative",
-                      bdy.name.c_str(),
-                      bdy.name_multiple.c_str(), number );
+    // See comments in `body_part_struct::load` about why these two strings are
+    // not a single translation object with plural enabled.
+    return number > 1 ? bdy.accusative_multiple.translated() : bdy.accusative.translated();
 }
 
 std::string body_part_name_as_heading( body_part bp, int number )
 {
     const auto &bdy = get_bp( bp );
-    return ngettext( bdy.name_as_heading_singular.c_str(), bdy.name_as_heading_multiple.c_str(),
-                     number );
+    // See comments in `body_part_struct::load` about why these two strings are
+    // not a single translation object with plural enabled.
+    return number > 1 ? bdy.name_as_heading_multiple.translated() : bdy.name_as_heading.translated();
 }
 
 std::string body_part_hp_bar_ui_text( body_part bp )
 {
-    return _( get_bp( bp ).hp_bar_ui_text.c_str() );
+    return _( get_bp( bp ).hp_bar_ui_text );
 }
 
 std::string encumb_text( body_part bp )
 {
     const std::string &txt = get_bp( bp ).encumb_text;
-    return !txt.empty() ? _( txt.c_str() ) : txt;
+    return !txt.empty() ? _( txt ) : txt;
 }
 
 body_part random_body_part( bool main_parts_only )
