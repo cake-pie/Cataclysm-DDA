@@ -1,21 +1,19 @@
 #include "mapdata.h"
 
+#include <unordered_map>
+
+#include "calendar.h"
 #include "color.h"
-#include "init.h"
+#include "debug.h"
 #include "game_constants.h"
-#include "string_formatter.h"
 #include "generic_factory.h"
 #include "harvest.h"
-#include "debug.h"
-#include "translations.h"
-#include "output.h"
-#include "item.h"
-#include "item_group.h"
-#include "calendar.h"
-#include "trap.h"
 #include "iexamine.h"
-
-#include <unordered_map>
+#include "item_group.h"
+#include "output.h"
+#include "string_formatter.h"
+#include "translations.h"
+#include "trap.h"
 
 namespace
 {
@@ -77,7 +75,7 @@ bool string_id<ter_t>::is_valid() const
 
 /** @relates int_id */
 template<>
-inline bool int_id<furn_t>::is_valid() const
+bool int_id<furn_t>::is_valid() const
 {
     return furniture_data.is_valid( *this );
 }
@@ -156,6 +154,8 @@ static const std::unordered_map<std::string, ter_bitflags> ter_bitflags_map = { 
         { "GOES_UP",                  TFLAG_GOES_UP },        // Allows non-flying creatures to move upwards
         { "NO_FLOOR",                 TFLAG_NO_FLOOR },       // Things should fall when placed on this tile
         { "SEEN_FROM_ABOVE",          TFLAG_SEEN_FROM_ABOVE },// This should be visible if the tile above has no floor
+        { "HIDE_PLACE",               TFLAG_HIDE_PLACE },     // Creature on this tile can't be seen by other creature not standing on adjacent tiles
+        { "BLOCK_WIND",               TFLAG_BLOCK_WIND},      // This tile will partially block the wind.
         { "RAMP",                     TFLAG_RAMP },           // Can be used to move up a z-level
     }
 };
@@ -184,7 +184,7 @@ map_bash_info::map_bash_info() : str_min( -1 ), str_max( -1 ),
     explosive( 0 ), sound_vol( -1 ), sound_fail_vol( -1 ),
     collapse_radius( 1 ), destroy_only( false ), bash_below( false ),
     drop_group( "EMPTY_GROUP" ),
-    ter_set( ter_str_id::NULL_ID() ), furn_set( furn_str_id::NULL_ID() ) {};
+    ter_set( ter_str_id::NULL_ID() ), furn_set( furn_str_id::NULL_ID() ) {}
 
 bool map_bash_info::load( JsonObject &jsobj, const std::string &member, bool is_furniture )
 {
@@ -219,7 +219,10 @@ bool map_bash_info::load( JsonObject &jsobj, const std::string &member, bool is_
     if( is_furniture ) {
         furn_set = furn_str_id( j.get_string( "furn_set", "f_null" ) );
     } else {
-        ter_set = ter_str_id( j.get_string( "ter_set" ) );
+        const std::string ter_set_string = j.get_string( "ter_set" );
+        ter_set = ter_str_id( ter_set_string );
+        ter_set_bashed_from_above = ter_str_id( j.get_string( "ter_set_bashed_from_above",
+                                                ter_set_string ) );
     }
 
     if( j.has_member( "items" ) ) {
@@ -237,7 +240,7 @@ bool map_bash_info::load( JsonObject &jsobj, const std::string &member, bool is_
 }
 
 map_deconstruct_info::map_deconstruct_info() : can_do( false ), deconstruct_above( false ),
-    ter_set( ter_str_id::NULL_ID() ), furn_set( furn_str_id::NULL_ID() ) {};
+    ter_set( ter_str_id::NULL_ID() ), furn_set( furn_str_id::NULL_ID() ) {}
 
 bool map_deconstruct_info::load( JsonObject &jsobj, const std::string &member, bool is_furniture )
 {
@@ -275,7 +278,7 @@ furn_t null_furniture_t()
 
 ter_t::ter_t() : open( ter_str_id::NULL_ID() ), close( ter_str_id::NULL_ID() ),
     transforms_into( ter_str_id::NULL_ID() ),
-    roof( ter_str_id::NULL_ID() ), trap( tr_null ) {};
+    roof( ter_str_id::NULL_ID() ), trap( tr_null ) {}
 
 ter_t null_terrain_t()
 {
@@ -341,7 +344,7 @@ void map_data_common_t::load_symbol( JsonObject &jo )
         } else if( str.length() != 1 ) {
             jo.throw_error( "Symbol string must be exactly 1 character long.", "symbol" );
         }
-        return ( int ) str[0];
+        return static_cast<int>( str[0] );
     } );
 
     const bool has_color = jo.has_member( "color" );
@@ -398,7 +401,7 @@ void load_terrain( JsonObject &jo, const std::string &src )
 void map_data_common_t::set_flag( const std::string &flag )
 {
     flags.insert( flag );
-    auto const it = ter_bitflags_map.find( flag );
+    const auto it = ter_bitflags_map.find( flag );
     if( it != ter_bitflags_map.end() ) {
         bitflags.set( it->second );
         if( !transparent && it->second == TFLAG_TRANSPARENT ) {
@@ -413,7 +416,7 @@ void map_data_common_t::set_flag( const std::string &flag )
 
 void map_data_common_t::set_connects( const std::string &connect_group_string )
 {
-    auto const it = ter_connects_map.find( connect_group_string );
+    const auto it = ter_connects_map.find( connect_group_string );
     if( it != ter_connects_map.end() ) {
         connect_group = it->second;
     } else { // arbitrary connect groups are a bad idea for optimization reasons
@@ -436,7 +439,7 @@ ter_id t_null,
        t_dirt, t_sand, t_clay, t_dirtmound, t_pit_shallow, t_pit,
        t_pit_corpsed, t_pit_covered, t_pit_spiked, t_pit_spiked_covered, t_pit_glass, t_pit_glass_covered,
        t_rock_floor,
-       t_grass,
+       t_grass, t_grass_long, t_grass_tall, t_grass_golf, t_grass_dead, t_grass_white,
        t_metal_floor,
        t_pavement, t_pavement_y, t_sidewalk, t_concrete,
        t_thconc_floor, t_thconc_floor_olight, t_strconc_floor,
@@ -520,6 +523,7 @@ ter_id t_null,
        t_vat,
        t_rootcellar,
        t_cvdbody, t_cvdmachine,
+       t_nanofab, t_nanofab_body,
        t_water_pump,
        t_conveyor, t_machinery_light, t_machinery_heavy, t_machinery_old, t_machinery_electronic,
        t_improvised_shelter,
@@ -564,6 +568,8 @@ void set_ter_ids()
     t_pit_glass_covered = ter_id( "t_pit_glass_covered" );
     t_rock_floor = ter_id( "t_rock_floor" );
     t_grass = ter_id( "t_grass" );
+    t_grass_long = ter_id( "t_grass_long" );
+    t_grass_tall = ter_id( "t_grass_tall" );
     t_metal_floor = ter_id( "t_metal_floor" );
     t_pavement = ter_id( "t_pavement" );
     t_pavement_y = ter_id( "t_pavement_y" );
@@ -771,6 +777,8 @@ void set_ter_ids()
     t_rootcellar = ter_id( "t_rootcellar" );
     t_cvdbody = ter_id( "t_cvdbody" );
     t_cvdmachine = ter_id( "t_cvdmachine" );
+    t_nanofab = ter_id( "t_nanofab" );
+    t_nanofab_body = ter_id( "t_nanofab_body" );
     t_stairs_down = ter_id( "t_stairs_down" );
     t_stairs_up = ter_id( "t_stairs_up" );
     t_manhole = ter_id( "t_manhole" );
@@ -1037,7 +1045,7 @@ void map_data_common_t::load( JsonObject &jo, const std::string &src )
                 // @todo: A better inline name - can't use id or name here because it's not set yet
                 size_t num = harvest_list::all().size() + 1;
                 hl = harvest_list::load( harvest_jo, src,
-                                         string_format( "harvest_inline_%d", ( int )num ) );
+                                         string_format( "harvest_inline_%d", static_cast<int>( num ) ) );
             } else if( harvest_jo.has_string( "id" ) ) {
                 hl = harvest_id( harvest_jo.get_string( "id" ) );
             } else {
@@ -1147,7 +1155,7 @@ void ter_t::check() const
     }
 }
 
-furn_t::furn_t() : open( furn_str_id::NULL_ID() ), close( furn_str_id::NULL_ID() ) {};
+furn_t::furn_t() : open( furn_str_id::NULL_ID() ), close( furn_str_id::NULL_ID() ) {}
 
 size_t furn_t::count()
 {
@@ -1159,6 +1167,9 @@ void furn_t::load( JsonObject &jo, const std::string &src )
     map_data_common_t::load( jo, src );
     mandatory( jo, was_loaded, "name", name_ );
     mandatory( jo, was_loaded, "move_cost_mod", movecost );
+    optional( jo, was_loaded, "comfort", comfort, 0 );
+    optional( jo, was_loaded, "floor_bedding_warmth", floor_bedding_warmth, 0 );
+    optional( jo, was_loaded, "bonus_fire_warmth_feet", bonus_fire_warmth_feet, 300 );
     mandatory( jo, was_loaded, "required_str", move_str_req );
     optional( jo, was_loaded, "max_volume", max_volume, legacy_volume_reader,
               DEFAULT_MAX_VOLUME_IN_SQUARE );

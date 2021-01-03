@@ -2,18 +2,19 @@
 #ifndef MUTATION_H
 #define MUTATION_H
 
-#include "character.h"
-#include "enums.h" // tripoint
-#include "bodypart.h"
-#include "damage.h"
-#include "calendar.h"
-#include "string_id.h"
-#include <string>
-#include <vector>
-#include <utility>
 #include <map>
 #include <set>
 #include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "bodypart.h"
+#include "calendar.h"
+#include "character.h"
+#include "damage.h"
+#include "enums.h" // tripoint
+#include "string_id.h"
+#include "tuple_hash.h"
 
 class nc_color;
 class JsonObject;
@@ -83,7 +84,8 @@ struct mut_attack {
 };
 
 struct mutation_branch {
-        using MutationMap = std::unordered_map<trait_id, mutation_branch>;
+        trait_id id;
+        bool was_loaded = false;
         // True if this is a valid mutation (False for "unavailable from generic mutagen").
         bool valid = false;
         // True if Purifier can remove it (False for *Special* mutations).
@@ -94,6 +96,8 @@ struct mutation_branch {
         bool profession;
         //True if the mutation is obtained through the debug menu
         bool debug;
+        // True if the mutation should be displayed in the `@` menu
+        bool player_display = true;
         // Whether it has positive as well as negative effects.
         bool mixed_effect  = false;
         bool startingtrait = false;
@@ -128,6 +132,9 @@ struct mutation_branch {
         float hp_modifier_secondary = 0.0f;
         // Flat bonus/penalty to hp.
         float hp_adjustment = 0.0f;
+
+        // Subtracted from the range at which monsters see player, corresponding to percentage of change. Clamped to +/- 60 for effectiveness
+        float stealth_modifier = 0.0f;
 
         // Extra metabolism rate multiplier. 1.0 doubles usage, -0.5 halves.
         float metabolism_modifier = 0.0f;
@@ -204,11 +211,12 @@ struct mutation_branch {
          * All known mutations. Key is the mutation id, value is the mutation_branch that you would
          * also get by calling @ref get.
          */
-        static const MutationMap &get_all();
+        static const std::vector<mutation_branch> &get_all();
         // For init.cpp: reset (clear) the mutation data
         static void reset_all();
         // For init.cpp: load mutation data from json
-        static void load( JsonObject &jsobj );
+        void load( JsonObject &jo, const std::string &src );
+        static void load_trait( JsonObject &jo, const std::string &src );
         // For init.cpp: check internal consistency (valid ids etc.) of all mutations
         static void check_consistency();
 

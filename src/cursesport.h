@@ -2,9 +2,9 @@
 #ifndef CATACURSE_H
 #define CATACURSE_H
 
-#include <vector>
 #include <array>
 #include <string>
+#include <vector>
 
 class nc_color;
 
@@ -77,5 +77,6 @@ void clear_window_area( const catacurses::window &win );
 int projected_window_width();
 int projected_window_height();
 bool handle_resize( int w, int h );
+int get_scaling_factor();
 
 #endif

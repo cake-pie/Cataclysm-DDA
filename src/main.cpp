@@ -1,39 +1,47 @@
-/* Main Loop for cataclysm
- * Linux only I guess
- * But maybe not
- * Who knows
+/* Entry point and main loop for Cataclysm
  */
-
-#include "cursesdef.h"
-#include "game.h"
-#include "rng.h"
-#include "color.h"
-#include "options.h"
-#include "debug.h"
-#include "filesystem.h"
-#include "path_info.h"
-#include "mapsharing.h"
-#include "output.h"
-#include "main_menu.h"
-#include "loading_ui.h"
-#include "crash.h"
 
 #include <cstring>
 #include <ctime>
+#include <iostream>
 #include <locale>
 #include <map>
-#include <iostream>
-#include <stdexcept>
+#if (!(defined _WIN32 || defined WINDOWS))
 #include <signal.h>
+#endif
+#include <stdexcept>
 #ifdef LOCALIZE
 #include <libintl.h>
 #endif
+
+#include "color.h"
+#include "crash.h"
+#include "cursesdef.h"
+#include "debug.h"
+#include "filesystem.h"
+#include "game.h"
+#include "loading_ui.h"
+#include "main_menu.h"
+#include "mapsharing.h"
+#include "options.h"
+#include "output.h"
+#include "path_info.h"
+#include "rng.h"
 #include "translations.h"
 
+#ifdef TILES
+#   if defined(_MSC_VER) && defined(USE_VCPKG)
+#      include <SDL2/SDL_version.h>
+#   else
+#      include <SDL_version.h>
+#   endif
+#endif
+
 #ifdef __ANDROID__
-#include "SDL_system.h"
-#include "SDL_filesystem.h"
-#include "SDL_keyboard.h"
+#include <unistd.h>
+#include <SDL_system.h>
+#include <SDL_filesystem.h>
+#include <SDL_keyboard.h>
 #include <android/log.h>
 
 // Taken from: https://codelab.wordpress.com/2014/11/03/how-to-use-standard-output-streams-for-logging-in-android-apps/
@@ -522,13 +530,19 @@ int main( int argc, char *argv[] )
         }
     }
 
+    if( !dir_exist( FILENAMES["datadir"] ) ) {
+        printf( "Fatal: Can't find directory \"%s\"\nPlease ensure the current working directory is correct. Perhaps you meant to start \"cataclysm-launcher\"?\n",
+                FILENAMES["datadir"].c_str() );
+        exit( 1 );
+    }
+
     if( !assure_dir_exist( FILENAMES["user_dir"] ) ) {
         printf( "Can't open or create %s. Check permissions.\n",
                 FILENAMES["user_dir"].c_str() );
         exit( 1 );
     }
 
-    setupDebug();
+    setupDebug( DebugOutput::file );
 
     /**
      * OS X does not populate locale env vars correctly (they usually default to
@@ -559,9 +573,28 @@ int main( int argc, char *argv[] )
     get_options().load();
     set_language();
 
+#ifdef TILES
+    SDL_version compiled;
+    SDL_VERSION( &compiled );
+    DebugLog( D_INFO, DC_ALL ) << "SDL version used during compile is "
+                               << static_cast<int>( compiled.major ) << "."
+                               << static_cast<int>( compiled.minor ) << "."
+                               << static_cast<int>( compiled.patch );
+
+    SDL_version linked;
+    SDL_GetVersion( &linked );
+    DebugLog( D_INFO, DC_ALL ) << "SDL version used during linking and in runtime is "
+                               << static_cast<int>( linked.major ) << "."
+                               << static_cast<int>( linked.minor ) << "."
+                               << static_cast<int>( linked.patch );
+#endif
+
     // in test mode don't initialize curses to avoid escape sequences being inserted into output stream
     if( !test_mode ) {
         try {
+            // set minimum FULL_SCREEN sizes
+            FULL_SCREEN_WIDTH = 80;
+            FULL_SCREEN_HEIGHT = 24;
             catacurses::init_interface();
         } catch( const std::exception &err ) {
             // can't use any curses function as it has not been initialized
@@ -574,7 +607,7 @@ int main( int argc, char *argv[] )
     srand( seed );
     rng_set_engine_seed( seed );
 
-    g = new game;
+    g.reset( new game );
     // First load and initialize everything that does not
     // depend on the mods.
     try {
@@ -612,7 +645,7 @@ int main( int argc, char *argv[] )
 #endif
 
 #ifdef LOCALIZE
-    std::string lang = "";
+    std::string lang;
 #if (defined _WIN32 || defined WINDOWS)
     lang = getLangFromLCID( GetUserDefaultLCID() );
 #else
@@ -647,7 +680,7 @@ int main( int argc, char *argv[] )
         }
 
         while( !g->do_turn() );
-    };
+    }
 
     exit_handler( -999 );
     return 0;
@@ -711,9 +744,7 @@ void exit_handler( int s )
         deinitDebug();
 
         int exit_status = 0;
-        if( g != NULL ) {
-            delete g;
-        }
+        g.reset();
 
         catacurses::endwin();
 

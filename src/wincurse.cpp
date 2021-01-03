@@ -2,17 +2,18 @@
 #define UNICODE 1
 #define _UNICODE 1
 
-#include "cursesport.h"
+#include "cursesport.h" // IWYU pragma: associated
+
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+
 #include "cursesdef.h"
 #include "options.h"
 #include "output.h"
 #include "color.h"
 #include "catacharset.h"
 #include "get_version.h"
-#include <cstdlib>
-#include <fstream>
-#include <sstream>
-#include "catacharset.h"
 #include "init.h"
 #include "input.h"
 #include "path_info.h"
@@ -678,10 +679,10 @@ bool gamepad_available()
     return false;
 }
 
-bool input_context::get_coordinates( const catacurses::window &, int &, int & )
+cata::optional<tripoint> input_context::get_coordinates( const catacurses::window & )
 {
     // TODO: implement this properly
-    return false;
+    return cata::nullopt;
 }
 
 //Ends the terminal, destroy everything
@@ -711,6 +712,11 @@ void input_manager::set_timeout( const int t )
 
 void cata_cursesport::handle_additional_window_clear( WINDOW * )
 {
+}
+
+int get_scaling_factor()
+{
+    return 1;
 }
 
 #endif

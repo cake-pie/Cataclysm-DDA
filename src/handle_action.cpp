@@ -1,53 +1,54 @@
-#include "game.h"
-#include "gamemode.h"
-#include "gates.h"
-#include "action.h"
-#include "input.h"
-#include "vpart_range.h"
-#include "output.h"
-#include "player.h"
-#include "messages.h"
-#include "vehicle.h"
-#include "vpart_position.h"
-#include "vpart_reference.h"
-#include "map.h"
-#include "options.h"
-#include "mapsharing.h"
-#include "safemode_ui.h"
-#include "pickup.h"
-#include "game_inventory.h"
-#include "ranged.h"
-#include "debug.h"
-#include "worldfactory.h"
-#include "faction.h"
-#include "itype.h"
-#include "auto_pickup.h"
-#include "gun_mode.h"
-#include "construction.h"
-#include "bionics.h"
-#include "mutation.h"
-#include "monster.h"
-#include "help.h"
-#include "calendar.h"
-#include "weather.h"
-#include "sounds.h"
-#include "veh_type.h"
-#include "mapdata.h"
-#include "mtype.h"
-#include "field.h"
-#include "clzones.h"
-#include "cursesdef.h"
-#include "overmap_ui.h"
-#include "popup.h"
+#include "game.h" // IWYU pragma: associated
 
 #include <chrono>
 
-#define dbg(x) DebugLog((DebugLevel)(x),D_GAME) << __FILE__ << ":" << __LINE__ << ": "
+#include "action.h"
+#include "advanced_inv.h"
+#include "auto_pickup.h"
+#include "bionics.h"
+#include "calendar.h"
+#include "clzones.h"
+#include "construction.h"
+#include "cursesdef.h"
+#include "debug.h"
+#include "faction.h"
+#include "field.h"
+#include "game_inventory.h"
+#include "gamemode.h"
+#include "gates.h"
+#include "gun_mode.h"
+#include "help.h"
+#include "input.h"
+#include "itype.h"
+#include "map.h"
+#include "mapdata.h"
+#include "mapsharing.h"
+#include "messages.h"
+#include "monster.h"
+#include "mtype.h"
+#include "mutation.h"
+#include "options.h"
+#include "output.h"
+#include "overmap_ui.h"
+#include "pickup.h"
+#include "player.h"
+#include "popup.h"
+#include "ranged.h"
+#include "safemode_ui.h"
+#include "sounds.h"
+#include "veh_type.h"
+#include "vehicle.h"
+#include "vpart_position.h"
+#include "vpart_range.h"
+#include "vpart_reference.h"
+#include "weather.h"
+#include "worldfactory.h"
 
-void advanced_inv();
+#define dbg(x) DebugLog((DebugLevel)(x),D_GAME) << __FILE__ << ":" << __LINE__ << ": "
 
 const efftype_id effect_alarm_clock( "alarm_clock" );
 const efftype_id effect_laserlocked( "laserlocked" );
+const efftype_id effect_relax_gas( "relax_gas" );
 
 static const bionic_id bio_remote( "bio_remote" );
 
@@ -125,7 +126,7 @@ input_context game::get_player_input( std::string &action )
         }
 
         //x% of the Viewport, only shown on visible areas
-        auto const weather_info = get_weather_animation( weather );
+        const auto weather_info = get_weather_animation( weather );
         int offset_x = ( u.posx() + u.view_offset.x ) - getmaxx( w_terrain ) / 2;
         int offset_y = ( u.posy() + u.view_offset.y ) - getmaxy( w_terrain ) / 2;
 
@@ -133,8 +134,8 @@ input_context game::get_player_input( std::string &action )
         if( tile_iso && use_tiles ) {
             iStartX = 0;
             iStartY = 0;
-            iEndX = MAPSIZE * SEEX;
-            iEndY = MAPSIZE * SEEY;
+            iEndX = MAPSIZE_X;
+            iEndY = MAPSIZE_Y;
             offset_x = 0;
             offset_y = 0;
         }
@@ -340,11 +341,12 @@ static void rcdrive( int dx, int dy )
     tripoint dest( cx + dx, cy + dy, cz );
     if( m.impassable( dest ) || !m.can_put_items_ter_furn( dest ) ||
         m.has_furn( dest ) ) {
-        sounds::sound( dest, 7, _( "sound of a collision with an obstacle." ) );
+        sounds::sound( dest, 7, sounds::sound_t::combat,
+                       _( "sound of a collision with an obstacle." ) );
         return;
     } else if( !m.add_item_or_charges( dest, *rc_car ).is_null() ) {
         //~ Sound of moving a remote controlled car
-        sounds::sound( src, 6, _( "zzz..." ) );
+        sounds::sound( src, 6, sounds::sound_t::movement, _( "zzz..." ) );
         u.moves -= 50;
         m.i_rem( src, rc_car );
         car_location_string.clear();
@@ -384,7 +386,7 @@ static void pldrive( int x, int y )
             return;
         }
     } else {
-        if( empty( veh->get_parts( "REMOTE_CONTROLS" ) ) ) {
+        if( empty( veh->get_avail_parts( "REMOTE_CONTROLS" ) ) ) {
             add_msg( m_info, _( "Can't drive this vehicle remotely. It has no working controls." ) );
             return;
         }
@@ -398,10 +400,12 @@ static void open()
     player &u = g->u;
     map &m = g->m;
 
-    tripoint openp;
-    if( !choose_adjacent_highlight( _( "Open where?" ), openp, ACTION_OPEN ) ) {
+    const cata::optional<tripoint> openp_ = choose_adjacent_highlight( _( "Open where?" ),
+                                            ACTION_OPEN );
+    if( !openp_ ) {
         return;
     }
+    const tripoint openp = *openp_;
 
     u.moves -= 100;
 
@@ -431,7 +435,7 @@ static void open()
             // If there are any OPENABLE parts here, they must be already open
             if( const cata::optional<vpart_reference> already_open = vp.part_with_feature( "OPENABLE",
                     true ) ) {
-                const std::string name = veh->part_info( already_open->part_index() ).name();
+                const std::string name = already_open->info().name();
                 add_msg( m_info, _( "That %s is already open." ), name.c_str() );
             }
             u.moves += 100;
@@ -460,9 +464,9 @@ static void open()
 
 static void close()
 {
-    tripoint closep;
-    if( choose_adjacent_highlight( _( "Close where?" ), closep, ACTION_CLOSE ) ) {
-        doors::close_door( g->m, g->u, closep );
+    if( const cata::optional<tripoint> pnt = choose_adjacent_highlight( _( "Close where?" ),
+            ACTION_CLOSE ) ) {
+        doors::close_door( g->m, g->u, *pnt );
     }
 }
 
@@ -497,7 +501,6 @@ static void grab()
     player &u = g->u;
     map &m = g->m;
 
-    tripoint grabp( 0, 0, 0 );
     if( u.get_grab_type() != OBJECT_NONE ) {
         if( const optional_vpart_position vp = m.veh_at( u.pos() + u.grab_point ) ) {
             add_msg( _( "You release the %s." ), vp->vehicle().name );
@@ -509,32 +512,35 @@ static void grab()
         return;
     }
 
-    if( choose_adjacent( _( "Grab where?" ), grabp ) ) {
-        if( grabp == u.pos() ) {
-            add_msg( _( "You get a hold of yourself." ) );
-            u.grab( OBJECT_NONE );
+    const cata::optional<tripoint> grabp_ = choose_adjacent( _( "Grab where?" ) );
+    if( !grabp_ ) {
+        add_msg( _( "Never mind." ) );
+        return;
+    }
+    const tripoint grabp = *grabp_;
+
+    if( grabp == u.pos() ) {
+        add_msg( _( "You get a hold of yourself." ) );
+        u.grab( OBJECT_NONE );
+        return;
+    }
+
+    if( const optional_vpart_position vp = m.veh_at( grabp ) ) {
+        u.grab( OBJECT_VEHICLE, grabp - u.pos() );
+        add_msg( _( "You grab the %s." ), vp->vehicle().name );
+    } else if( m.has_furn( grabp ) ) { // If not, grab furniture if present
+        if( m.furn( grabp ).obj().move_str_req < 0 ) {
+            add_msg( _( "You can not grab the %s" ), m.furnname( grabp ).c_str() );
             return;
         }
-
-        if( const optional_vpart_position vp = m.veh_at( grabp ) ) {
-            u.grab( OBJECT_VEHICLE, grabp - u.pos() );
-            add_msg( _( "You grab the %s." ), vp->vehicle().name );
-        } else if( m.has_furn( grabp ) ) { // If not, grab furniture if present
-            if( m.furn( grabp ).obj().move_str_req < 0 ) {
-                add_msg( _( "You can not grab the %s" ), m.furnname( grabp ).c_str() );
-                return;
-            }
-            u.grab( OBJECT_FURNITURE, grabp - u.pos() );
-            if( !m.can_move_furniture( grabp, &u ) ) {
-                add_msg( _( "You grab the %s. It feels really heavy." ), m.furnname( grabp ).c_str() );
-            } else {
-                add_msg( _( "You grab the %s." ), m.furnname( grabp ).c_str() );
-            }
-        } else { // @todo: grab mob? Captured squirrel = pet (or meat that stays fresh longer).
-            add_msg( m_info, _( "There's nothing to grab there!" ) );
+        u.grab( OBJECT_FURNITURE, grabp - u.pos() );
+        if( !m.can_move_furniture( grabp, &u ) ) {
+            add_msg( _( "You grab the %s. It feels really heavy." ), m.furnname( grabp ).c_str() );
+        } else {
+            add_msg( _( "You grab the %s." ), m.furnname( grabp ).c_str() );
         }
-    } else {
-        add_msg( _( "Never mind." ) );
+    } else { // @todo: grab mob? Captured squirrel = pet (or meat that stays fresh longer).
+        add_msg( m_info, _( "There's nothing to grab there!" ) );
     }
 }
 
@@ -560,7 +566,6 @@ static void haul()
     }
 }
 
-
 static void smash()
 {
     player &u = g->u;
@@ -570,12 +575,13 @@ static void smash()
     bool didit = false;
     ///\EFFECT_STR increases smashing capability
     int smashskill = u.str_cur + u.weapon.damage_melee( DT_BASH );
-    tripoint smashp;
 
     const bool allow_floor_bash = debug_mode; // Should later become "true"
-    if( !choose_adjacent( _( "Smash where?" ), smashp, allow_floor_bash ) ) {
+    const cata::optional<tripoint> smashp_ = choose_adjacent( _( "Smash where?" ), allow_floor_bash );
+    if( !smashp_ ) {
         return;
     }
+    tripoint smashp = *smashp_;
 
     bool smash_floor = false;
     if( smashp.z != u.posz() ) {
@@ -590,7 +596,7 @@ static void smash()
 
     if( m.get_field( smashp, fd_web ) != nullptr ) {
         m.remove_field( smashp, fd_web );
-        sounds::sound( smashp, 2, "" );
+        sounds::sound( smashp, 2, sounds::sound_t::combat, "hsh!" );
         add_msg( m_info, _( "You brush aside some webs." ) );
         u.moves -= 100;
         return;
@@ -623,7 +629,7 @@ static void smash()
             for( auto &elem : u.weapon.contents ) {
                 m.add_item_or_charges( u.pos(), elem );
             }
-            sounds::sound( u.pos(), 24, "" );
+            sounds::sound( u.pos(), 24, sounds::sound_t::combat, "CRACK!" );
             u.deal_damage( nullptr, bp_hand_r, damage_instance( DT_CUT, rng( 0, vol ) ) );
             if( vol > 20 ) {
                 // Hurt left arm too, if it was big
@@ -713,15 +719,15 @@ static void sleep()
     uilist as_m;
     as_m.text = _( "Are you sure you want to sleep?" );
     // (Y)es/(S)ave before sleeping/(N)o
-    as_m.entries.emplace_back( uimenu_entry( 0, true,
-                               ( get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'Y' : 'y' ),
-                               _( "Yes." ) ) );
-    as_m.entries.emplace_back( uimenu_entry( 1, ( g->get_moves_since_last_save() ),
-                               ( get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'S' : 's' ),
-                               _( "Yes, and save game before sleeping." ) ) );
-    as_m.entries.emplace_back( uimenu_entry( 2, true,
-                               ( get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'N' : 'n' ),
-                               _( "No." ) ) );
+    as_m.entries.emplace_back( 0, true,
+                               get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'Y' : 'y',
+                               _( "Yes." ) );
+    as_m.entries.emplace_back( 1, g->get_moves_since_last_save(),
+                               get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'S' : 's',
+                               _( "Yes, and save game before sleeping." ) );
+    as_m.entries.emplace_back( 2, true,
+                               get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'N' : 'n',
+                               _( "No." ) );
 
     // List all active items, bionics or mutations so player can deactivate them
     std::vector<std::string> active;
@@ -731,7 +737,7 @@ static void sleep()
         }
     }
     for( int i = 0; i < g->u.num_bionics(); i++ ) {
-        bionic const &bio = u.bionic_at_index( i );
+        const bionic &bio = u.bionic_at_index( i );
         if( !bio.powered ) {
             continue;
         }
@@ -742,7 +748,7 @@ static void sleep()
             continue;
         }
 
-        auto const &info = bio.info();
+        const auto &info = bio.info();
         if( info.power_over_time > 0 ) {
             active.push_back( info.name );
         }
@@ -784,13 +790,13 @@ static void sleep()
                     _( "You're engorged to hibernate. The alarm would only attract attention. Set an alarm anyway?" ) :
                     _( "You have an alarm clock. Set an alarm?" );
 
-        as_m.entries.emplace_back( uimenu_entry( 0, true,
-                                   ( get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'N' : 'n' ),
-                                   _( "No, don't set an alarm." ) ) );
+        as_m.entries.emplace_back( 0, true,
+                                   get_option<bool>( "FORCE_CAPITAL_YN" ) ? 'N' : 'n',
+                                   _( "No, don't set an alarm." ) );
 
         for( int i = 3; i <= 9; ++i ) {
-            as_m.entries.emplace_back( uimenu_entry( i, true, '0' + i,
-                                       string_format( _( "Set alarm to wake up in %i hours." ), i ) ) );
+            as_m.entries.emplace_back( i, true, '0' + i,
+                                       string_format( _( "Set alarm to wake up in %i hours." ), i ) );
         }
 
         as_m.query();
@@ -812,7 +818,9 @@ static void loot()
         None = 1,
         SortLoot = 2,
         TillPlots = 4,
-        PlantPlots = 8
+        PlantPlots = 8,
+        FertilizePlots = 16,
+        HarvestPlots = 32,
     };
 
     auto just_one = []( int flags ) {
@@ -826,11 +834,14 @@ static void loot()
     const bool has_seeds = u.has_item_with( []( const item & itm ) {
         return itm.is_seed();
     } );
+    const bool has_fertilizer = u.has_item_with_flag( "FERTILIZER" );
 
     flags |= g->check_near_zone( zone_type_id( "LOOT_UNSORTED" ), u.pos() ) ? SortLoot : 0;
     if( g->check_near_zone( zone_type_id( "FARM_PLOT" ), u.pos() ) ) {
         flags |= TillPlots;
         flags |= PlantPlots;
+        flags |= FertilizePlots;
+        flags |= HarvestPlots;
     }
 
     if( flags == 0 ) {
@@ -848,7 +859,7 @@ static void loot()
 
         if( flags & SortLoot ) {
             menu.addentry_desc( SortLoot, true, 'o', _( "Sort out my loot" ),
-                                _( "Sorts out the loot from Loot: Unsorted zone to nerby appropriate Loot zones. Uses empty space in your inventory or utilizes a cart, if you are holding one." ) );
+                                _( "Sorts out the loot from Loot: Unsorted zone to nearby appropriate Loot zones. Uses empty space in your inventory or utilizes a cart, if you are holding one." ) );
         }
 
         if( flags & TillPlots ) {
@@ -862,6 +873,16 @@ static void loot()
                                 !warm_enough_to_plant() ? _( "Plant seeds... it is too cold for planting" ) :
                                 !has_seeds ? _( "Plant seeds... you don't have any" ) : _( "Plant seeds" ),
                                 _( "Plant seeds into nearby Farm: Plot zones. Farm plot has to be set to specific plant seed and you must have seeds in your inventory." ) );
+        }
+        if( flags & FertilizePlots ) {
+            menu.addentry_desc( FertilizePlots, has_fertilizer, 'f',
+                                !has_fertilizer ? _( "Fertilize plots... you don't have any fertilizer" ) : _( "Fertilize plots" ),
+                                _( "Fertilize any nearby Farm: Plot zones." ) );
+        }
+
+        if( flags & HarvestPlots ) {
+            menu.addentry_desc( HarvestPlots, true, 'h', _( "Harvest plots" ),
+                                _( "Harvest any full-grown plants from nearby Farm: Plot zones" ) );
         }
 
         menu.query();
@@ -890,6 +911,12 @@ static void loot()
             } else {
                 u.assign_activity( activity_id( "ACT_PLANT_PLOT" ) );
             }
+            break;
+        case FertilizePlots:
+            u.assign_activity( activity_id( "ACT_FERTILIZE_PLOT" ) );
+            break;
+        case HarvestPlots:
+            u.assign_activity( activity_id( "ACT_HARVEST_PLOT" ) );
             break;
         default:
             debugmsg( "Unsupported flag" );
@@ -932,6 +959,23 @@ static void read()
     } else {
         add_msg( _( "Never mind." ) );
     }
+}
+
+// Perform a reach attach
+// range - the range of the current weapon.
+// u - player
+static void reach_attack( int range, player &u )
+{
+    g->temp_exit_fullscreen();
+    g->m.draw( g->w_terrain, u.pos() );
+    std::vector<tripoint> trajectory = target_handler().target_ui( u, TARGET_MODE_REACH, &u.weapon,
+                                       range );
+    if( !trajectory.empty() ) {
+        u.reach_attack( trajectory.back() );
+    }
+    g->draw_ter();
+    wrefresh( g->w_terrain );
+    g->reenter_fullscreen();
 }
 
 static void fire()
@@ -1042,16 +1086,30 @@ static void fire()
         g->plfire( u.weapon );
     } else if( u.weapon.has_flag( "REACH_ATTACK" ) ) {
         int range = u.weapon.has_flag( "REACH3" ) ? 3 : 2;
-        g->temp_exit_fullscreen();
-        g->m.draw( g->w_terrain, u.pos() );
-        std::vector<tripoint> trajectory;
-        trajectory = target_handler().target_ui( u, TARGET_MODE_REACH, &u.weapon, range );
-        if( !trajectory.empty() ) {
-            u.reach_attack( trajectory.back() );
+        if( u.has_effect( effect_relax_gas ) ) {
+            if( one_in( 8 ) ) {
+                add_msg( m_good, _( "Your willpower asserts itself, and so do you!" ) );
+                reach_attack( range, u );
+            } else {
+                u.moves -= rng( 2, 8 ) * 10;
+                add_msg( m_bad, _( "You're too pacified to strike anything..." ) );
+            }
+        } else {
+            reach_attack( range, u );
         }
-        g->draw_ter();
-        wrefresh( g->w_terrain );
-        g->reenter_fullscreen();
+    } else if( u.weapon.is_gun() && u.weapon.gun_current_mode().flags.count( "REACH_ATTACK" ) ) {
+        int range = u.weapon.gun_current_mode().qty;
+        if( u.has_effect( effect_relax_gas ) ) {
+            if( one_in( 8 ) ) {
+                add_msg( m_good, _( "Your willpower asserts itself, and so do you!" ) );
+                reach_attack( range, u );
+            } else {
+                u.moves -= rng( 2, 8 ) * 10;
+                add_msg( m_bad, _( "You're too pacified to strike anything..." ) );
+            }
+        } else {
+            reach_attack( range, u );
+        }
     }
 }
 
@@ -1083,7 +1141,7 @@ bool game::handle_action()
 
     // If performing an action with right mouse button, co-ordinates
     // of location clicked.
-    tripoint mouse_target = tripoint_min;
+    cata::optional<tripoint> mouse_target;
 
     // quit prompt check (ACTION_QUIT only grabs 'Q')
     if( uquit == QUIT_WATCH && action == "QUIT" ) {
@@ -1135,23 +1193,24 @@ bool game::handle_action()
                 return false;
             }
 
-            int mx = 0;
-            int my = 0;
-            if( !ctxt.get_coordinates( w_terrain, mx, my ) || !u.sees( tripoint( mx, my, u.posz() ) ) ) {
+            const cata::optional<tripoint> mouse_pos = ctxt.get_coordinates( w_terrain );
+            if( !mouse_pos ) {
+                return false;
+            } else if( !u.sees( *mouse_pos ) ) {
                 // Not clicked in visible terrain
                 return false;
             }
-            mouse_target = tripoint( mx, my, u.posz() );
+            mouse_target = mouse_pos;
 
             if( act == ACTION_SELECT ) {
                 // Note: The following has the potential side effect of
                 // setting auto-move destination state in addition to setting
                 // act.
-                if( !try_get_left_click_action( act, mouse_target ) ) {
+                if( !try_get_left_click_action( act, *mouse_target ) ) {
                     return false;
                 }
             } else if( act == ACTION_SEC_SELECT ) {
-                if( !try_get_right_click_action( act, mouse_target ) ) {
+                if( !try_get_right_click_action( act, *mouse_target ) ) {
                     return false;
                 }
             }
@@ -1385,8 +1444,8 @@ bool game::handle_action()
             case ACTION_CLOSE:
                 if( u.has_active_mutation( trait_SHELL2 ) ) {
                     add_msg( m_info, _( "You can't close things while you're in your shell." ) );
-                } else if( mouse_target != tripoint_min ) {
-                    doors::close_door( m, u, mouse_target );
+                } else if( mouse_target ) {
+                    doors::close_door( m, u, *mouse_target );
                 } else {
                     close();
                 }
@@ -1405,8 +1464,8 @@ bool game::handle_action()
             case ACTION_EXAMINE:
                 if( u.has_active_mutation( trait_SHELL2 ) ) {
                     add_msg( m_info, _( "You can't examine your surroundings while you're in your shell." ) );
-                } else if( mouse_target != tripoint_min ) {
-                    examine( mouse_target );
+                } else if( mouse_target ) {
+                    examine( *mouse_target );
                 } else {
                     examine();
                 }
@@ -1477,7 +1536,7 @@ bool game::handle_action()
                 break;
 
             case ACTION_COMPARE:
-                game_menus::inv::compare( u );
+                game_menus::inv::compare( u, cata::nullopt );
                 break;
 
             case ACTION_ORGANIZE:
@@ -1550,7 +1609,18 @@ bool game::handle_action()
 
             case ACTION_SELECT_FIRE_MODE:
                 if( u.is_armed() ) {
-                    u.weapon.gun_cycle_mode();
+                    if( u.weapon.is_gun() && !u.weapon.is_gunmod() && u.weapon.gun_all_modes().size() > 1 ) {
+                        u.weapon.gun_cycle_mode();
+                    } else if( u.weapon.has_flag( "RELOAD_ONE" ) || u.weapon.has_flag( "RELOAD_AND_SHOOT" ) ) {
+                        item::reload_option opt = u.select_ammo( u.weapon, false );
+                        if( !opt ) {
+                            break;
+                        } else if( u.ammo_location && opt.ammo == u.ammo_location ) {
+                            u.ammo_location = item_location();
+                        } else {
+                            u.ammo_location = opt.ammo.clone();
+                        }
+                    }
                 }
                 break;
 
